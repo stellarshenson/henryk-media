@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "henryk_media"
+version = "0.1.0"
+description = "Content generation and manipulation for media for Henry"
+authors = [
+    { name = "Konrad Jelen \u003ckonrad.jelen@gmail.com\u003e" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = "~=3.13.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+dependencies = [
+    "loguru",
+    "tqdm",
+    "typer",
+    "python-dotenv",
+    "botocore",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "ipykernel",
+    "ipython",
+    "nbdime",
+    "pip",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "awscli",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["henryk_media*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 99
+src = ["src/henryk_media"]
+include = ["pyproject.toml", "src/henryk_media/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["henryk_media"]
+force-sort-within-sections = true

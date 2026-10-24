@@ -1,0 +1,27 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v1.3.21
+_src_path: https://github.com/stellarshenson/copier-data-science.git
+ai_assistant: none
+author_name: Konrad Jelen <konrad.jelen@gmail.com>
+custom_config: ''
+dataset_storage: s3
+dependency_file: pyproject.toml
+description: Content generation and manipulation for media for Henry
+docker_support: 'No'
+docs: none
+env_encryption: 'Yes'
+env_name: henryk-media
+environment_manager: uv
+git_init: 'Yes'
+jupyter_kernel_support: 'Yes'
+linting_and_formatting: ruff
+module_name: henryk_media
+open_source_license: MIT
+package_repository: none
+pydata_packages: none
+python_version_choice: '3.13'
+repo_name: henryk-media
+s3_aws_profile: stellars-tech
+s3_bucket: general-purpose/henryk-media
+scaffold_agents: 'No'
+testing_framework: pytest
