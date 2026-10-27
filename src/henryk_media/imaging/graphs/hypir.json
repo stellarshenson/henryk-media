@@ -1,0 +1,6 @@
+{
+  "1": {"class_type": "LoadImage", "inputs": {"image": "{{IMAGE}}"}},
+  "2": {"class_type": "HyperComfyUIHYPIRRestore", "inputs": {"image": ["1", 0], "prompt": "{{PROMPT}}", "base_model_path": "{{BASE_MODEL}}", "weight_name": "HYPIR_sd2.pth", "upscale": "{{SCALE}}", "patch_size": 512, "stride": 256, "scale_by": "factor", "seed": "{{SEED}}"}},
+  "3": {"class_type": "ImageScale", "inputs": {"image": ["2", 0], "upscale_method": "lanczos", "width": "{{WIDTH}}", "height": "{{HEIGHT}}", "crop": "disabled"}},
+  "4": {"class_type": "SaveImage", "inputs": {"images": ["3", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}}
+}

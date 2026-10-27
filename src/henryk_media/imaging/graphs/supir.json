@@ -1,0 +1,13 @@
+{
+  "1": {"class_type": "LoadImage", "inputs": {"image": "{{IMAGE}}"}},
+  "2": {"class_type": "ImageScale", "inputs": {"image": ["1", 0], "upscale_method": "lanczos", "width": "{{WIDTH}}", "height": "{{HEIGHT}}", "crop": "disabled"}},
+  "3": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base_1.0.safetensors"}},
+  "4": {"class_type": "ModelPatchLoader", "inputs": {"name": "SUPIR-v0Q_fp16.safetensors"}},
+  "5": {"class_type": "SUPIRApply", "inputs": {"model": ["3", 0], "model_patch": ["4", 0], "vae": ["3", 2], "image": ["2", 0], "strength_start": 1.0, "strength_end": 1.0, "restore_cfg": 4.0, "restore_cfg_s_tmin": 0.05}},
+  "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{PROMPT}}", "clip": ["3", 1]}},
+  "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{NEGATIVE_PROMPT}}", "clip": ["3", 1]}},
+  "8": {"class_type": "VAEEncode", "inputs": {"pixels": ["2", 0], "vae": ["3", 2]}},
+  "9": {"class_type": "KSampler", "inputs": {"model": ["5", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["8", 0], "seed": "{{SEED}}", "steps": "{{STEPS}}", "cfg": "{{CFG}}", "sampler_name": "{{SAMPLER}}", "scheduler": "{{SCHEDULER}}", "denoise": 1.0}},
+  "10": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0], "vae": ["3", 2]}},
+  "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}}
+}

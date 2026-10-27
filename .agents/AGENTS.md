@@ -33,7 +33,8 @@ derived media follow as requested.
 
 **Directory Layout**:
 - `data/raw/` - original photos and videos of Henry, immutable, gitignored
-- `data/processed/` - generated media, gitignored
+- `data/processed/` - generated media of approved production runs, gitignored
+- `tmp/media/` - bench and test renders, gitignored
 - `models/` - third-party model weights move through `make sync_models_*`, never git
 - `notebooks/` - generation experiments, numbered in execution order per task folder
 - `src/henryk_media/` - stable code graduated from notebooks
@@ -50,6 +51,11 @@ derived media follow as requested.
 
 - **Privacy of a minor** - photos and videos of Henry are personal data of a child. Never send them to an external service (cloud generation API, web tool, browser upload) without the Star Colonel's explicit approval for that service. Prefer models that run locally on the workstation GPUs
 - **Originals are immutable** - never modify, overwrite or delete files in `data/raw/`; every generated file goes to a different directory
+- **Only production runs write to data** - a bench or test render writes under `tmp/media/<subfolder>/`, never into `data/`. `data/interim/` and `data/processed/` receive only outputs of an approved production run, each with its `.md` sidecar, and `tmp/` is gitignored so bench media never reaches git
+- **Human review gates promotion** - a generated image or clip reaches `data/processed/` only after the Star Colonel has viewed it and judged it good, or when he declares the run production before viewing it. Agents render, measure and present candidates with their paths; the promotion follows his verdict, never an agent's own.
 - **Generated media stays distinguishable from originals** - every output gets a `.md` sidecar naming the source file, the model, the prompt and the settings, so no generated clip can be mistaken for a genuine recording
 - **GPU work** sets `CUDA_VISIBLE_DEVICES` to the nvidia-smi index before importing torch; the `my-gpu` skill carries the device inventory and inference recipes
 - **Experiments live in notebooks**, not in `/tmp` scripts; long generation runs execute detached and log to `logs/<name>.log`
+- **Only the latest render** - a new render of a model first moves that model's previous clips and sidecars to the trash, so its output folder and its notebook hold only the latest render
+- **No child images in notebooks** - a notebook never stores image or video data of a child. Photos and clips are shown only by link (`IPython.display.Image(url=<relative path>)`, `Video(<relative path>, embed=False)`), never embedded as base64 or through `Image(filename=...)`
+- **Notebooks reach the repository without outputs** - every notebook is committed and pushed with all outputs and execution counts cleared; `RELEASE.md` in the repository root is the checklist for every commit and push

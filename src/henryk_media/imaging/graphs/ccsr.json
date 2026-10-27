@@ -1,0 +1,7 @@
+{
+  "1": {"class_type": "LoadImage", "inputs": {"image": "{{IMAGE}}"}},
+  "2": {"class_type": "DownloadAndLoadCCSRModel", "inputs": {"model": "real-world_ccsr-fp16.safetensors"}},
+  "3": {"class_type": "CCSR_Upscale", "inputs": {"ccsr_model": ["2", 0], "image": ["1", 0], "resize_method": "lanczos", "scale_by": "{{SCALE}}", "steps": 45, "t_max": 0.6667, "t_min": 0.3333, "sampling_method": "ccsr_tiled_mixdiff", "tile_size": 512, "tile_stride": 256, "vae_tile_size_encode": 1024, "vae_tile_size_decode": 1024, "color_fix_type": "adain", "keep_model_loaded": false, "seed": "{{SEED}}"}},
+  "4": {"class_type": "ImageScale", "inputs": {"image": ["3", 0], "upscale_method": "lanczos", "width": "{{WIDTH}}", "height": "{{HEIGHT}}", "crop": "disabled"}},
+  "5": {"class_type": "SaveImage", "inputs": {"images": ["4", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}}
+}

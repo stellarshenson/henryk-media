@@ -2,6 +2,9 @@
 /logs/
 /tmp/
 
+# Third-party photo-animation code and weights - recreate with the commands in models/photo-animation.md
+/models/photo-animation/
+
 # Data - keep the folder tree and Markdown (README indexes + file sidecars);
 # data files themselves stay out of git
 /data/**

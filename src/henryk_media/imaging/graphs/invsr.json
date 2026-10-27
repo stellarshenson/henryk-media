@@ -1,0 +1,7 @@
+{
+  "1": {"class_type": "LoadImage", "inputs": {"image": "{{IMAGE}}"}},
+  "2": {"class_type": "LoadInvSRModels", "inputs": {"sd_model": "stabilityai/sd-turbo", "invsr_model": "noise_predictor_sd_turbo_v5.pth", "dtype": "fp16", "tiled_vae": true}},
+  "3": {"class_type": "InvSRSampler", "inputs": {"invsr_pipe": ["2", 0], "images": ["1", 0], "num_steps": 1, "cfg": 1.0, "batch_size": 1, "chopping_batch_size": 8, "chopping_size": 256, "color_fix": "wavelet", "seed": "{{SEED}}"}},
+  "4": {"class_type": "ImageScale", "inputs": {"image": ["3", 0], "upscale_method": "lanczos", "width": "{{WIDTH}}", "height": "{{HEIGHT}}", "crop": "disabled"}},
+  "5": {"class_type": "SaveImage", "inputs": {"images": ["4", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}}
+}

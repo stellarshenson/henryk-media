@@ -223,6 +223,41 @@ data: requirements
 	@echo "$(MSG_PREFIX) generating dataset"
 	$(PROJECT_DIR)/.venv/bin/python src/henryk_media/dataset.py
 
+COMFYUI_DIR = $(PROJECT_DIR)/models/photo-animation/ComfyUI
+COMFYUI_VENV = $(COMFYUI_DIR)/.venv
+TORCH_INDEX_URL = https://download.pytorch.org/whl/cu130
+
+FRAME_INTERPOLATION_WEIGHT = $(COMFYUI_DIR)/models/frame_interpolation/film_net_fp16.safetensors
+FRAME_INTERPOLATION_REV = 219da3c9d8c357ceaf457fc1d5932c6e861b8dee
+FRAME_INTERPOLATION_SHA256 = f226e51375dc839d4b40e5c3d63da560dd1ea1c962364ec78f5adf2d05db05c0
+
+.PHONY: comfyui_frame_interpolation
+## Download the FILM weights ComfyUI's core frame-interpolation nodes load to reach 30 fps
+comfyui_frame_interpolation:
+	@echo "$(MSG_PREFIX) downloading FILM weights into $(HIGHLIGHT_STYLE)$(COMFYUI_DIR)/models/frame_interpolation$(NO_STYLE)"
+	@if ! echo "$(FRAME_INTERPOLATION_SHA256)  $(FRAME_INTERPOLATION_WEIGHT)" | sha256sum -c --status - 2>/dev/null; then \
+		hf download Comfy-Org/Frame-Interpolation --revision $(FRAME_INTERPOLATION_REV) \
+			--local-dir $(COMFYUI_DIR)/models frame_interpolation/film_net_fp16.safetensors; \
+		echo "$(FRAME_INTERPOLATION_SHA256)  $(FRAME_INTERPOLATION_WEIGHT)" | sha256sum -c -; \
+	fi
+	@echo "$(OK_STYLE)>>> FILM weights ready$(NO_STYLE)"
+
+.PHONY: comfyui_environment
+## Create the ComfyUI environment with CUDA 13.0 torch and the node pack requirements
+comfyui_environment:
+	@echo "$(MSG_PREFIX) creating uv virtual environment at $(HIGHLIGHT_STYLE)$(COMFYUI_VENV)$(NO_STYLE)"
+	uv $(UV_OPTS) venv -q --allow-existing --python $(PYTHON_VERSION) $(COMFYUI_VENV)
+	@echo "$(MSG_PREFIX) installing torch, torchvision and torchaudio from $(TORCH_INDEX_URL)"
+	uv $(UV_OPTS) pip install --python $(COMFYUI_VENV) --index-url $(TORCH_INDEX_URL) torch torchvision torchaudio
+	@echo "$(MSG_PREFIX) installing ComfyUI and node pack requirements"
+	uv $(UV_OPTS) pip install --python $(COMFYUI_VENV) \
+		-r $(COMFYUI_DIR)/requirements.txt \
+		-r $(COMFYUI_DIR)/custom_nodes/ComfyUI-AdvancedLivePortrait/requirements.txt \
+		-r $(COMFYUI_DIR)/custom_nodes/ComfyUI-VideoHelperSuite/requirements.txt
+	@echo "$(MSG_PREFIX) turning off ultralytics usage events"
+	$(COMFYUI_VENV)/bin/yolo settings sync=False
+	@echo "$(OK_STYLE)>>> ComfyUI environment ready$(NO_STYLE)"
+
 #################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################

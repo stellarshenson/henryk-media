@@ -7,6 +7,7 @@ Project documentation - the written record of how the work was done and what was
 - Exploration and scientific method walkthrough - what was tried and what it showed
 - Experiments - designs, runs, and outcomes
 - SOTA solution - the current best approach and why it wins
+- [Photo animation model selection](model-selection/photo-animation.md) - purpose-built models for a 3 s live-photo clip from one still photo, ranked, with the test plan
 - Acceptance criteria - what the deliverable must satisfy
 - Defects - known issues and their status
 

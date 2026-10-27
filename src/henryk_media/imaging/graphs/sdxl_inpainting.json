@@ -1,0 +1,63 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "{{IMAGE}}"}
+  },
+  "2": {
+    "class_type": "ImagePadForOutpaint",
+    "inputs": {
+      "image": ["1", 0],
+      "left": "{{PAD_LEFT}}",
+      "top": "{{PAD_TOP}}",
+      "right": "{{PAD_RIGHT}}",
+      "bottom": "{{PAD_BOTTOM}}",
+      "feathering": "{{FEATHER}}"
+    }
+  },
+  "3": {
+    "class_type": "DiffusersLoader",
+    "inputs": {"model_path": "stable-diffusion-xl-1.0-inpainting-0.1"}
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "{{PROMPT}}", "clip": ["3", 1]}
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "{{NEGATIVE_PROMPT}}", "clip": ["3", 1]}
+  },
+  "6": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "vae": ["3", 2],
+      "pixels": ["2", 0],
+      "mask": ["2", 1],
+      "noise_mask": true
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["3", 0],
+      "positive": ["6", 0],
+      "negative": ["6", 1],
+      "latent_image": ["6", 2],
+      "seed": "{{SEED}}",
+      "steps": "{{STEPS}}",
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "denoise": "{{DENOISE}}"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["7", 0], "vae": ["3", 2]}
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {"images": ["8", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}
+  }
+}

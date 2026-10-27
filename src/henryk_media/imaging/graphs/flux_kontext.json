@@ -1,0 +1,81 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "{{IMAGE}}"}
+  },
+  "2": {
+    "class_type": "ImagePadForOutpaint",
+    "inputs": {
+      "image": ["1", 0],
+      "left": "{{PAD_LEFT}}",
+      "top": "{{PAD_TOP}}",
+      "right": "{{PAD_RIGHT}}",
+      "bottom": "{{PAD_BOTTOM}}",
+      "feathering": "{{FEATHER}}"
+    }
+  },
+  "3": {
+    "class_type": "UNETLoader",
+    "inputs": {"unet_name": "flux1-kontext-dev.safetensors", "weight_dtype": "default"}
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "ae.safetensors"}
+  },
+  "5": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux",
+      "device": "default"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "{{PROMPT}}", "clip": ["5", 0]}
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "{{NEGATIVE_PROMPT}}", "clip": ["5", 0]}
+  },
+  "8": {
+    "class_type": "FluxGuidance",
+    "inputs": {"conditioning": ["6", 0], "guidance": "{{FLUX_GUIDANCE}}"}
+  },
+  "9": {
+    "class_type": "VAEEncode",
+    "inputs": {"pixels": ["2", 0], "vae": ["4", 0]}
+  },
+  "10": {
+    "class_type": "ReferenceLatent",
+    "inputs": {"conditioning": ["8", 0], "latent": ["9", 0]}
+  },
+  "11": {
+    "class_type": "ReferenceLatent",
+    "inputs": {"conditioning": ["7", 0], "latent": ["9", 0]}
+  },
+  "12": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["3", 0],
+      "positive": ["10", 0],
+      "negative": ["11", 0],
+      "latent_image": ["9", 0],
+      "seed": "{{SEED}}",
+      "steps": "{{STEPS}}",
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "denoise": "{{DENOISE}}"
+    }
+  },
+  "13": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["12", 0], "vae": ["4", 0]}
+  },
+  "14": {
+    "class_type": "SaveImage",
+    "inputs": {"images": ["13", 0], "filename_prefix": "{{FILENAME_PREFIX}}"}
+  }
+}
