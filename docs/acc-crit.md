@@ -238,10 +238,12 @@ Rules that keep a child's media out of the repository and generated files distin
   - test-tags: MANUAL
   - log: 2026-10-24T22:38:57Z @kj added
   - log: 2026-10-24T22:43:44Z @kj closed: checked the originals
-- [ ] `ACC-RELE-16-DATA` **Only metadata staged under data** - MEDIUM; a commit stages only .md files under data/, never a photo, clip or weight
+- [x] `ACC-RELE-16-DATA` **Only metadata staged under data** - MEDIUM; a commit stages only .md files under data/, never a photo, clip or weight
+  - evidence: commit 32a2531 stages 124 files with no photo, clip or weight; only .md under data; five notebooks carry no outputs; make test 75 pass, make lint clean; pushed to origin main
   - test: git diff --cached --name-only, assert only .md files under data/
   - test-tags: MANUAL
   - log: 2026-10-24T22:38:57Z @kj added
+  - log: 2026-10-27T13:21:17Z @kj closed
 - [x] `ACC-RELE-28-OUTPUT-LOCATION` **Output location** - HIGH; only a production run writes into data/; bench and test renders write under tmp/media/, every output carries its sidecar, and notebooks link media by relative path
   - evidence: notebook 04 writes tmp/media/ltx25-i2v-probe; data/processed holds only the production H3 10 s run with sidecars
   - test: run notebook 01 and one test render, assert their outputs land under tmp/media and nothing new appears under data/; git status shows no media staged

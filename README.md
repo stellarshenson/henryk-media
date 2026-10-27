@@ -1,76 +1,99 @@
 # henryk-media
 
-AI generation and manipulation of media for Henry. The first use case is animating still photos into short video clips (image-to-video); other derived media follow as needed.
+Generation and manipulation of media for Henry, a child. The first campaign extends birthday photos
+into landscape frames and animates each frame into a 10 second clip. Every model runs on the
+workstation GPUs, and no photo or clip is sent to an external service.
 
-- Original photos and videos stay in `data/raw/` and are never modified; generated media goes to `data/processed/`
-- Both stay out of git; every generated file carries a `.md` sidecar naming its source file, model, prompt and settings
-- Generation prefers models that run locally on the workstation GPUs, so photos of Henry do not leave the machine
+## How it works
 
-> **Note**: Generated with copier-data-science template v1.2+
-> For template documentation, visit [copier-data-science](https://github.com/stellarshenson/copier-data-science)
+- Image outpainting extends a photo sideways into 4:3 at 1280 x 960 or 16:9 at 1280 x 720
+- FLUX 3 Klein and its outpaint LoRA generate only the added side panels
+- The photo's interior pixels are pasted back unchanged
+- A person gate rejects a frame whose panels add a face or person, and the next seed is tried
+- Image-to-video animates the extended frame into a 10 second clip with MiniMax H3 or LTX-2.5
+- FILM interpolates the native frames to 30 fps, 300 frames per clip
+- The models run through ComfyUI servers bound to `127.0.0.1`; nothing is sent to an external service
 
-## Quick Start
+## Where the pieces live
+
+- `notebooks/henryk-urodziny-2026/` - `01-kj-image-extender.ipynb` through
+  `05-kj-minimax-h3.ipynb`, in execution order
+- `src/henryk_media/imaging/` - extender, person gate, composite, provenance, registry and server
+- `src/henryk_media/animation/` - image-to-video client, FILM interpolation, LivePortrait wrappers
+- `.agents/skills/` - the `image-outpainting` and `image-to-video` working recipes
+- `docs/model-selection/` - the research guides and decision records
+- `docs/acc-crit.md` and `docs/defects.md` - the acceptance-criteria and defects trackers
+- `data/external/henryk-urodziny-2026/prompts/` - the prompts that produced the campaign media
+
+## Data and privacy
+
+- Files in `data/raw/` are originals and are never modified, overwritten or deleted
+- Only an approved production run writes `data/processed/` and `data/interim/`
+- Every generated file gets a `.md` sidecar naming its source, model, prompt and settings
+- A render reaches `data/processed/` only after the Star Colonel views it and judges it good, or declares the run production
+- A bench or test render writes under `tmp/media/` and never into `data/`
+- Notebooks link photos and clips by relative path and never embed them
+- Notebooks are committed with outputs cleared; `RELEASE.md` is the checklist
+
+## Setup
 
 ```bash
 make install
 ```
 
-## Makefile Targets
+- `make comfyui_environment` - Create the ComfyUI environment with CUDA 13.0 torch and the node pack requirements
+- `make comfyui_frame_interpolation` - Download the FILM weights ComfyUI's core frame-interpolation nodes load to reach 30 fps
 
-- `make install` - Create environment and install package
-- `make test` - Run tests
+## Makefile targets
+
+- `make install` - Create the uv environment and install the package
+- `make test` - Run the pytest suite
 - `make lint` / `make format` - Check / fix code style
-- `make data` - Run the dataset pipeline (`src/henryk_media/dataset.py`)
-- `make upgrade` - Upgrade dependencies to latest versions
-- `make build` - Build distributable wheel
-- `make clean` - Remove compiled files, caches, logs and tmp
-- `make sync_data_down` / `make sync_data_up` - Sync data with cloud storage
-- `make sync_models_down` / `make sync_models_up` - Sync models with cloud storage
-- `make .env` / `make .env.enc` - Decrypt / encrypt environment secrets
-- `make help` - Show all available targets
+- `make requirements` / `make upgrade` - Install / upgrade dependencies with uv
+- `make create_environment` / `remove_environment` / `register_environment` - Manage the environment
+- `make data` - Run `src/henryk_media/dataset.py`
+- `make build` / `make clean` - Build the wheel / remove caches, logs and `tmp/`
+- `make sync_data_down` / `sync_data_up` - Sync `data/` with the lab S3 endpoint
+- `make sync_models_down` / `sync_models_up` - Sync `models/` with the lab S3 endpoint
+- The sync targets use the `stellars-tech` profile and bucket `general-purpose/henryk-media`
+- `make .env` / `make .env.enc` - Decrypt / encrypt the environment secrets
+- `make help` - List every target with its description
 
-## Best Practices
-
-- **Notebooks**: organized in task-specific folders (`exploration/`, `training/`, `evaluation/`) rather than a flat list, numbered in execution order inside each (`01-data-exploration.ipynb`); import from `src/henryk_media/` instead of redefining code in cells; keep only exploratory or one-off code here. See [notebooks/README.md](notebooks/README.md)
-- **Source code**: graduate stable notebook and experiment code into `src/henryk_media/`
-- **Experiments**: experiment code and scripts in `src/experiments/` (created as needed, source-only, not shipped, safe to delete) - keeps scripts in one place instead of scattered across the project, so experiment notebooks in `notebooks/experiments/` can import unified, shared code from it; results in `reports/experiments/`, experiment data in `data/experiments/`; papers and digests in `references/papers/`
-- **Data**: not committed by default; only small (~50 MB), processed, non-reproducible data belongs in git. Every data folder keeps a `README.md` index; every large file (dump, parquet) gets a `<name>.md` sidecar named without the original extension (`sales.parquet` → `sales.md`, not `sales.parquet.md`). DB dumps go under `data/external/dumps/` (raw) or `data/interim/dumps/` (processed), created as needed. See [data/README.md](data/README.md)
-- **Models**: only lightweight self-developed or fine-tuned models (~100 MB, case by case) in purpose-named folders (`embedders/`, `classifiers/`), each with a `.md` sidecar; never commit third-party models (Hugging Face) - use model sync (S3). See [models/README.md](models/README.md)
-- **Documentation**: `docs/` holds the project's own documentation - dataset and model recipes, exploration and scientific method walkthrough, experiments, SOTA solution, acceptance criteria, defects. See [docs/README.md](docs/README.md)
-- **References**: `references/` holds material brought in from outside the project - data descriptions and dictionaries, papers and digests in `references/papers/`, manuals and API docs. See [references/README.md](references/README.md)
-- **Logs**: runtime and job logs in `logs/` (gitignored), with a short `logs/README.md`
-- **Temporary files**: `tmp/` for throwaway work (gitignored); never keep anything here
-
-## Project Organization
+## Project organization
 
 ```
-├── Makefile           <- Makefile with convenience commands
-├── README.md          <- The top-level README for developers
-├── CHANGELOG.md       <- Release notes, Keep a Changelog format
-├── data               <- Each folder keeps a README.md index; large files get a .md sidecar
-│   ├── external       <- Data from third party sources
-│   ├── interim        <- Intermediate data that has been transformed
-│   ├── processed      <- The final, canonical data sets for modeling
-│   └── raw            <- The original, immutable data dump
-│
-├── docs               <- Project documentation: recipes, experiments, SOTA, acceptance criteria
-├── logs               <- Runtime and background-job logs (gitignored)
-├── models             <- Trained and serialized models
-├── notebooks          <- Jupyter notebooks, organized in task-specific folders
-├── tmp                <- Throwaway scratch: temp scripts, notebooks, data (gitignored)
-├── pyproject.toml     <- Project configuration and dependencies
-├── references         <- External material: data descriptions, papers, manuals
-├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures        <- Generated graphics and figures
-├── tests              <- Test files
-└── src
-    └── henryk_media   <- Source code for this project
-        ├── __init__.py
-        ├── config.py      <- Configuration variables
-        ├── dataset.py     <- Data download/generation scripts
-        ├── features.py    <- Feature engineering code
-        ├── modeling
-        │   ├── predict.py <- Model inference
-        │   └── train.py   <- Model training
-        └── plots.py       <- Visualization code
+├── .agents/skills/       <- image-outpainting and image-to-video recipes
+├── data/
+│   ├── external/         <- source photos, driving clips, prompt archive
+│   ├── interim/          <- working copies
+│   ├── processed/        <- approved frames and clips
+│   └── raw/              <- originals, immutable
+├── docs/
+│   ├── model-selection/  <- research guides and decision records
+│   ├── acc-crit.md       <- acceptance criteria tracker
+│   ├── defects.md        <- defects tracker
+│   └── video-scene-control.md
+├── logs/                 <- background-job logs (gitignored)
+├── models/
+│   ├── photo-animation/  <- ComfyUI and weights (gitignored)
+│   └── photo-animation.md <- how to recreate them
+├── notebooks/henryk-urodziny-2026/
+├── references/           <- external material
+├── reports/              <- generated analysis and figures
+├── src/henryk_media/
+│   ├── animation/
+│   └── imaging/
+├── tests/
+├── tmp/                  <- scratch and bench renders (gitignored)
+├── Makefile, pyproject.toml
+└── RELEASE.md            <- commit and push checklist
 ```
+
+> **Note**: Generated with copier-data-science template v1.3.21
+> For template documentation, visit [copier-data-science](https://github.com/stellarshenson/copier-data-science)
+
+## Links
+
+- [Release checklist](RELEASE.md), [acceptance criteria](docs/acc-crit.md), [defects](docs/defects.md)
+- [Data rules](data/README.md), [models](models/README.md), [notebooks](notebooks/README.md),
+  [references](references/README.md)
