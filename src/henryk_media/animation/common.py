@@ -71,8 +71,16 @@ def colour_profile(path: Path) -> str | None:
 
 
 def project_relative(path: Path) -> str:
-    """Return the path relative to the project root, as stored in sidecars and checkpoints."""
-    return str(path.resolve().relative_to(PROJ_ROOT))
+    """Return the path relative to the project root, as stored in sidecars and checkpoints.
+
+    A path outside the project, such as a studio state folder elsewhere, stays absolute.
+    """
+    resolved = path.resolve()
+    return (
+        str(resolved.relative_to(PROJ_ROOT))
+        if resolved.is_relative_to(PROJ_ROOT)
+        else str(resolved)
+    )
 
 
 def output_dir(photo_set: str, model: str) -> Path:

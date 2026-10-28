@@ -1,21 +1,5 @@
-#!/usr/bin/env bash
-# Rejects a commit that stages a notebook with outputs (RELEASE.md)
-set -euo pipefail
-
-bad=()
-while IFS= read -r -d '' nb; do
-    if ! git show ":$nb" | python3 -c '
-import json, sys
-cells = json.load(sys.stdin).get("cells", [])
-sys.exit(any(c.get("outputs") for c in cells))
-'; then
-        bad+=("$nb")
-    fi
-done < <(git diff --cached --name-only -z --diff-filter=ACMR -- '*.ipynb')
-
-if ((${#bad[@]})); then
-    echo "pre-commit: notebooks with outputs are staged:" >&2
-    printf '  %s\n' "${bad[@]}" >&2
-    echo "clear them (RELEASE.md), stage again and commit" >&2
-    exit 1
-fi
+#!/bin/sh
+# Refuses a commit whose staged files fail the photo guard: notebook outputs or attachments,
+# originals, media outside .images_readme/, content filters, embedded media, archives
+# (.githooks/photo_guard.py, RELEASE.md)
+exec python3 "$(dirname "$0")/photo_guard.py" pre-commit

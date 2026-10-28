@@ -1,0 +1,2 @@
+- `father-and-henry-programming.webp` - drawing of the father and Henry programming together on a computer; provenance in `father-and-henry-programming.md`
+- `father-and-henry-watching.webp` - drawing of the father and Henry watching the result together; provenance in `father-and-henry-watching.md`

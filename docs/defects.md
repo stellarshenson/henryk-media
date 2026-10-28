@@ -123,3 +123,25 @@ The photo extender notebook and its module under src/henryk_media/imaging/
   - log: 2026-10-25T06:07:19Z @kj added
   - log: 2026-10-25T14:57:35Z @kj rejected: flux-kontext is a bench variant, not the production extender; FLUX 3 Klein produced the 16:9 IMG_8564 frame and it passed the gate and the Star Colonel's view
 
+## Studio server `STUDIO`
+
+Defects of the local studio server
+
+- log: 2026-10-27T21:55:58Z @kj category created
+
+- [ ] `DEF-STUDIO-11-H3-CROP` **H3 crops a wide source to 4:3** - MAJOR; a 16:9 outpaint result animated at 1024x768 loses the outpainted panels: the MiniMax H3 node cover-crops the input to the canvas (comfy_extras/nodes_minimax_h3.py _resize center), and the studio sizes the video at 4:3 or 3:2 whatever the source aspect
+  - related: ACC-STUDIO-58-VID-OPTIONS
+  - repro: live run: outpaint IMG_0020 to 16:9 at 1280x720, animate the result at 1024x768; the clip shows the centre 4:3 only
+  - root-cause: 2026-10-27T21:55:58Z @kj video size taken from the preset (1024x768 or 480x320) and the source orientation only, never from the source aspect; the H3 node centre-crops to that size
+  - log: 2026-10-27T21:55:58Z @kj added
+- [ ] `DEF-STUDIO-12-PROGRESS-STAGES` **Progress skips decoding and interpolating** - MEDIUM; during a live job the stages decoding and interpolating never appear; the bar stays at sampling 88 until done (outpaint 7 s, video 42 s)
+  - related: ACC-STUDIO-64-PROGRESS
+  - repro: live run: watch the job endpoint during the H3 job; no decoding or interpolating stage is reported
+  - root-cause: 2026-10-27T21:55:58Z @kj prompts are queued without a client_id, so ComfyUI sends executing and progress events for later nodes only to that client; the interpolating stage, run by the studio itself, is not set before FILM starts
+  - log: 2026-10-27T21:55:58Z @kj added
+- [ ] `DEF-STUDIO-13-H3-PEAK` **H3 memory need recorded too low** - MEDIUM; the memory table assumes 66.156 GB for H3 1024x768 5 s; the live job peaked at 74.43 GB after an outpaint in the same ComfyUI process, so a GPU with 66.2 to 74.4 GB free is admitted and then runs out of memory
+  - related: ACC-STUDIO-43-GPU-FIT
+  - repro: live run sidecar tmp/media/studio-live/state/jobs/20261027-223015-d78a61/IMG_0020.md peak 74.43 GB against the table value 66.156 GB
+  - root-cause: 2026-10-27T21:55:58Z @kj the table value comes from a fresh-process production run; a warm process holding the Klein model adds the difference
+  - log: 2026-10-27T21:55:58Z @kj added
+

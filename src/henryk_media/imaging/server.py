@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 import json
 from pathlib import Path
+import re
 import subprocess
 import time
 
@@ -72,9 +73,10 @@ class ComfyServer:
         while not port_answers(setup.port):
             if time.monotonic() > deadline:
                 self.stop()
+                log = re.search(r">\s*(\S+\.log)", setup.launch_command)
                 raise TimeoutError(
                     f"the server did not answer on port {setup.port} within "
-                    f"{START_TIMEOUT_SECONDS} s; see logs/image-extender-server.log"
+                    f"{START_TIMEOUT_SECONDS} s; see {log.group(1) if log else 'its launch log'}"
                 )
             time.sleep(1)
         self.stats = api(setup.port, "/system_stats")  # ComfyUI, PyTorch and device it reports

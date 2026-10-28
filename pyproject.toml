@@ -40,7 +40,11 @@ dependencies = [
     "tyro==0.8.5",
     "pykalman==0.9.7",
     "ultralytics>=8.3",
+    "websocket-client",  # studio: ComfyUI progress events
 ]
+
+[project.scripts]
+henryk-media = "henryk_media.studio.cli:app"
 
 [project.optional-dependencies]
 dev = [
@@ -54,6 +58,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "awscli",
+    "playwright",  # studio browser tests; .venv/bin/playwright install chromium
 ]
 
 [[tool.uv.index]]
@@ -67,6 +72,9 @@ torchvision = { index = "pytorch-cu128" }
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools.package-data]
+"henryk_media.studio" = ["static/*", "graphs/*.json"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

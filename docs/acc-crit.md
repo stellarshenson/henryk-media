@@ -250,6 +250,62 @@ Rules that keep a child's media out of the repository and generated files distin
   - test-tags: MANUAL
   - log: 2026-10-25T02:13:02Z @kj added
   - log: 2026-10-26T03:36:53Z @kj closed
+- [x] `ACC-RELE-79-NO-ORIGINALS` **Originals refused** - CRITICAL; the pre-commit hook refuses a commit that stages a file byte-equal to any original under data/raw or data/external, whatever its path, name or extension
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_original_copied_to_docs_bin_fails, test_original_copied_to_images_readme_with_sidecar_fails, test_git_mv_of_tracked_original_to_images_readme_fails; verify-2 attempts 3a, 3b refused; verify-5c (PASS) attempts 5c, 5c-external refused naming HEAD:data/raw/orig.jpg and HEAD:data/external/set/orig.jpg
+  - test: temp repo: copy an original to docs/x.bin and to .images_readme/x.webp with a sidecar, stage each, assert the commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:27:09Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-80-NO-MEDIA` **Media only in .images_readme** - CRITICAL; the pre-commit hook refuses a staged image or video, detected by its content bytes, outside .images_readme/, and a non-Markdown file under data/
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_jpeg_renamed_notes_txt_fails, test_png_in_docs_fails, test_data_jpeg_forced_fails, test_symlink_replaced_by_jpeg_fails; verify-2 attempts 1, 2, 5a, 5b, E1, E7, E8, E9, E10 refused; verify-5c (PASS) attempt E1 refused
+  - test: temp repo: stage a JPEG renamed to notes.txt, a PNG in docs/ and data/x/a.jpg with -f, assert each commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:27:09Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-81-README-SIDECAR` **README image needs a sidecar** - HIGH; the pre-commit hook refuses an image in .images_readme/ whose <stem>.md sidecar is not staged or already tracked
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_images_readme_without_sidecar_fails, test_images_readme_with_sidecar_passes; verify-2 attempts 4 and N5 pass with the sidecar staged; verify-5c (PASS) attempts N5 and N5-head pass with the sidecar staged
+  - test: temp repo: stage .images_readme/d.webp alone, assert fail; with d.md, assert pass
+  - test-tags: UNIT
+  - log: 2026-10-27T20:27:10Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-82-NB-ATTACH` **No notebook attachments** - HIGH; the pre-commit hook refuses a notebook with a cell carrying attachments or outputs, in nbformat 4 cells or nbformat 3 worksheets
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_notebook_with_attachment_fails, test_notebook_with_outputs_fails, test_nbformat3_notebook_with_image_output_fails; verify-2 attempts 6 (v4 attachment), N (v4 PNG output), E3 (v3 PNG output), N4 (v3 attachment) refused
+  - test: temp repo: stage a v4 notebook with an attachment and a v3 notebook with an image output, assert each commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:27:10Z @kj added
+  - log: 2026-10-27T20:41:53Z @kj amended text "the pre-commit hook refuses a notebook with a cell carrying attachments, as it already refuses one with outputs" -> "the pre-commit hook refuses a notebook with a cell carrying attachments or outputs, in nbformat 4 cells or nbformat 3 worksheets"
+  - log: 2026-10-27T20:41:53Z @kj edited test "temp repo: stage a notebook whose markdown cell has an image attachment, assert the commit fails" -> "temp repo: stage a v4 notebook with an attachment and a v3 notebook with an image output, assert each commit fails"
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-83-HISTORY-CLEAN` **No photo in any commit** - CRITICAL; no commit in the history, local or on the GitHub remote, holds an image or video blob outside .images_readme/ or a blob byte-equal to an original
+  - evidence: audit.json history scan at main 1ac2390: 163 blobs locally and 163 on a GitHub mirror clone, 0 image or video hits, 0 sha256 matches against 25 originals; GitHub main equals local main; FUNCTIONAL scan, no test in tests/test_pre_commit_hook.py
+  - test: scan git rev-list --objects --all locally and on a fresh clone of the GitHub repository, assert zero hits
+  - test-tags: FUNCTIONAL
+  - log: 2026-10-27T20:27:10Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-84-NO-FILTER` **No content filter** - CRITICAL; the hooks refuse a staged Git LFS pointer and a staged .gitattributes line that sets a filter, so a photo cannot hide behind a clean filter
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_lfs_pointer_fails, test_gitattributes_filter_fails; verify-2 attempts E2 (filter=lfs) and N3 (filter=hide) refused; verify-5c (PASS) attempt E2 refused
+  - test: temp repo: stage an original with *.jpg filter=lfs, assert the commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:41:46Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-85-NO-EMBED` **No embedded photo** - HIGH; the hooks refuse any file holding a data:image/ or data:video/ URI and any zip, gzip, tar, 7z, rar, bzip2 or xz archive by content
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_svg_with_data_image_uri_fails, test_zip_holding_jpeg_fails; verify-2 attempts E5 (stored zip) and E6 (SVG data:image URI) refused
+  - test: temp repo: stage an SVG with a data:image/jpeg URI and a zip holding a JPEG, assert each commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:41:46Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-86-PRE-PUSH` **Push-time check** - CRITICAL; a pre-push hook runs the same checks over every blob in the commits being pushed and refuses the push on a hit, so a --no-verify commit cannot reach a remote
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_no_verify_photo_commit_refused_at_push, test_clean_push_passes; verify-2 attempts N1 and 5c-push refused with the bare remote left without refs, N5-push passes; verify-5c (PASS) attempt N1 refused, N5-push passes
+  - test: temp repo with a bare remote: commit a photo with --no-verify, push, assert the push fails and the remote is unchanged
+  - test-tags: UNIT
+  - log: 2026-10-27T20:41:46Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
+- [x] `ACC-RELE-87-NEAR-COPY` **No near-copy in .images_readme** - HIGH; the hooks refuse an image in .images_readme/ whose perceptual hash is within the threshold of any original, which catches re-encoded, resized and byte-padded copies
+  - evidence: tests/test_pre_commit_hook.py 24 passed: test_original_as_half_size_webp_in_images_readme_fails, test_original_with_appended_byte_in_images_readme_fails, test_screenshot_holding_small_original_passes, test_near_copy_check_without_venv_fails_closed; verify-2 attempts E4, N2, 3b refused at distance 0; verify-5c (PASS) attempt 5c-webp refused at distance 0
+  - test: temp repo: stage an original re-encoded as WebP at half size and one with an appended byte, each with a sidecar, assert each commit fails
+  - test-tags: UNIT
+  - log: 2026-10-27T20:41:53Z @kj added
+  - log: 2026-10-27T21:06:32Z @kj closed
 
 ## Model selection record `DOCS`
 
@@ -303,4 +359,271 @@ Model weights kept on the NAS so they are available locally
   - test-tags: MANUAL
   - log: 2026-10-25T02:04:37Z @kj added
   - log: 2026-10-26T10:01:08Z @kj closed
+
+## Studio server `STUDIO`
+
+Local web server with prompter, progress and generator for outpainting and MiniMax H3 video on one user-selected GPU, launched from the CLI
+
+- log: 2026-10-27T20:09:21Z @kj category created
+
+- [x] `ACC-STUDIO-38-CLI-LAUNCH` **CLI launch** - HIGH; `henryk-media studio` starts the server on 127.0.0.1, prints the local URL and the JupyterHub proxy URL, and exits 0 on Ctrl+C
+  - evidence: tests/test_studio_cli.py::test_studio_prints_the_local_and_proxy_urls + tests/functional/test_studio_cli.py::test_cli_serves_and_exits_zero_on_sigint green; make test 153 passed, 0 failed
+  - test: run `henryk-media studio --port 8520`, GET /, assert 200; send SIGINT, assert exit 0
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:21Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-39-LOOPBACK` **Loopback only** - CRITICAL; the studio and every ComfyUI server it starts listen on 127.0.0.1 only
+  - evidence: live jobs: /proc/net/tcp and tcp6 (ss not installed) show the studio on 127.0.0.1:8520 and its one ComfyUI server on 127.0.0.1:41489, no 0.0.0.0 or tcp6 row for either (tmp/workflows/studio/live.json); comfy.py launches ComfyUI with --listen 127.0.0.1; the README command check listened on 127.0.0.1:8520 only
+  - test: start the studio and a job, run `ss -ltnp`, assert no listener on 0.0.0.0 or a LAN address
+  - test-tags: FUNCTIONAL
+  - log: 2026-10-27T20:09:22Z @kj added
+  - log: 2026-10-27T21:51:12Z @kj closed: verified by studio-docs
+- [x] `ACC-STUDIO-40-GPU-LIST` **GPU list** - HIGH; the UI lists every GPU nvidia-smi reports, with index, name, total and free memory
+  - evidence: tests/test_studio_gpus.py::test_api_lists_every_gpu_nvidia_smi_reports + tests/functional/test_studio_page.py::test_gpu_picker_lists_every_gpu green; make test 153 passed, 0 failed
+  - test: fake nvidia-smi output with 3 GPUs, GET /api/gpus, assert 3 rows
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:22Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-41-GPU-SELECT` **One selected GPU** - HIGH; the user selects one GPU from the list; every job runs on that GPU only, pinned by UUID through CUDA_DEVICE_ORDER=PCI_BUS_ID and CUDA_VISIBLE_DEVICES before torch loads
+  - evidence: tests/test_studio_jobs.py::test_job_launches_comfyui_pinned_to_the_selected_gpu_uuid green; make test 153 passed, 0 failed
+  - test: select GPU 2, run a job against a fake ComfyUI launcher, assert the launch environment carries GPU 2's UUID
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:22Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-42-GPU-SWITCH` **Edge: GPU change** - MEDIUM; changing the GPU while a job runs is refused; while idle it stops the ComfyUI server on the old GPU, and the next job starts one on the new GPU
+  - evidence: tests/test_studio_jobs.py::test_gpu_change_is_refused_while_busy_and_stops_the_idle_server green; make test 153 passed, 0 failed
+  - test: fake runner: switch during a running job, assert 409; switch while idle, assert the old server stopped
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:22Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-43-GPU-FIT` **Memory fit check** - HIGH; a job whose recorded peak memory exceeds the selected GPU's total memory is refused with a message naming both values in GB; H3 at 1024x768 is refused on the 24 GB card
+  - evidence: tests/test_studio_gpus.py::test_job_above_the_gpu_total_is_refused_naming_both_gb green; make test 153 passed, 0 failed
+  - test: select a fake 24 GB GPU, submit H3 at 1024x768, assert 400 and both GB values in the message
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:22Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+  - log: 2026-10-27T21:56:04Z @kj recorded H3 peak too low, see DEF STUDIO H3-PEAK
+- [x] `ACC-STUDIO-44-GPU-BUSY` **Edge: GPU in use** - MEDIUM; a job is refused when the selected GPU's free memory is below the job's recorded peak, for example memory held by another process; no server is started
+  - evidence: tests/test_studio_gpus.py::test_job_above_the_free_memory_is_refused_without_a_launch green; make test 153 passed, 0 failed
+  - test: fake GPU with 2 GB free, submit an outpaint job, assert refusal and no launch
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:23Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-45-PICK` **Image picker** - HIGH; the picker lists images under data/raw, data/external/<campaign>/images, data/processed/<campaign>/extended and the studio uploads by file name, with no thumbnails; only the selected image is previewed
+  - evidence: tests/test_studio_api.py::test_picker_lists_names_without_thumbnails + tests/functional/test_studio_page.py::test_picker_shows_names_and_one_preview green; make test 153 passed, 0 failed
+  - test: fixture tree, GET /api/images, assert names and no thumbnail URLs; UI test shows one preview
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:23Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-46-UPLOAD` **Image upload** - HIGH; a JPEG, PNG or WebP uploaded from the browser is stored under tmp/media/studio/uploads and appears in the picker
+  - evidence: tests/test_studio_api.py::test_upload_is_stored_and_listed + tests/functional/test_studio_page.py::test_uploaded_image_appears_in_the_picker green; make test 153 passed, 0 failed
+  - test: POST a PNG to the upload endpoint, assert the file is stored and listed
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:23Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-47-UPLOAD-INVALID` **Edge: invalid upload** - MEDIUM; an upload that is not a decodable JPEG, PNG or WebP, or is over 50 MB, is refused with 400 and nothing is written
+  - evidence: tests/test_studio_api.py::test_invalid_or_oversized_upload_is_refused_and_writes_nothing green; make test 153 passed, 0 failed
+  - test: POST a text file and a 51 MB body, assert 400 and an unchanged uploads folder
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:23Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-48-PATH-ESCAPE` **Edge: path outside the roots** - CRITICAL; a request naming a file outside the input roots and the studio output folder, by `..`, an absolute path or a symlink, returns 404 and reads nothing
+  - evidence: tests/test_studio_api.py::test_paths_outside_the_roots_return_404 green; make test 153 passed, 0 failed
+  - test: request ../../.env, /etc/passwd and a symlink out of the root, assert 404 each
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:23Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-49-INPUTS-UNTOUCHED` **Inputs untouched** - CRITICAL; the studio never writes, moves or deletes a file under data/; results go to tmp/media/studio only
+  - evidence: tests/test_studio_jobs.py::test_jobs_leave_the_input_tree_unchanged + tests/functional/test_studio_page.py::test_page_jobs_leave_the_input_tree_unchanged green; make test 153 passed, 0 failed
+  - test: hash a data/ fixture tree, run an outpaint and a video job on fakes, assert equal hashes and results under tmp/media/studio
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:24Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-50-OUT-ASPECT` **Aspect ratio choice** - HIGH; outpainting offers the aspect ratios 1:1, 4:3, 3:2 and 16:9 and extends the photo sideways to the chosen one
+  - evidence: tests/test_studio_frames.py::test_outpaint_frames_reach_each_aspect green; make test 153 passed, 0 failed
+  - test: geometry for each ratio on a 3:4 source, assert the output width to height ratio
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:24Z @kj added
+  - log: 2026-10-27T21:23:38Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-51-OUT-RES` **Resolution choice** - HIGH; outpainting offers output widths 1024, 1280 (default), 1536 and 1920 px; the height follows the aspect ratio and both are multiples of 16
+  - evidence: tests/test_studio_frames.py::test_outpaint_sizes_are_multiples_of_16_at_every_width green; make test 153 passed, 0 failed
+  - test: geometry for each width and ratio, assert sizes and multiples of 16
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:24Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-52-OUT-NARROW` **Edge: photo already wide** - MEDIUM; a photo as wide as or wider than the chosen aspect ratio is refused with a message, since nothing is left to extend
+  - evidence: tests/test_studio_api.py::test_photo_already_wide_is_refused green; make test 153 passed, 0 failed
+  - test: 16:9 source with target 4:3, assert 400 and the message
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:24Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-53-OUT-PROMPTS` **Prompt and negative prompt** - HIGH; outpainting takes an editable positive and negative prompt, prefilled from the extender recipe
+  - evidence: tests/test_studio_jobs.py::test_outpaint_preset_and_edited_prompts_reach_the_graph green; make test 153 passed, 0 failed
+  - test: GET the outpaint preset, assert the recipe text; submit edited prompts, assert they reach the graph
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:24Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-54-OUT-CFG` **Negative prompt needs cfg** - MEDIUM; a cfg field defaults to 1.0; while the negative prompt is not empty and cfg is 1.0 the UI says the negative prompt has no effect at cfg 1.0
+  - evidence: tests/test_studio_jobs.py::test_cfg_defaults_to_one_and_reaches_the_graph + tests/functional/test_studio_page.py::test_negative_prompt_note_follows_cfg green; make test 153 passed, 0 failed
+  - test: UI test: type a negative prompt at cfg 1.0, assert the note; set cfg 2.0, assert the note is gone
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:27Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-55-OUT-PIXELS` **Photo pixels kept** - CRITICAL; every outpaint result holds the source photo's pixels unchanged inside the photo area
+  - evidence: tests/test_studio_jobs.py::test_outpaint_keeps_the_photo_pixels_over_noise green; make test 153 passed, 0 failed
+  - test: fake generator returns noise, assert the photo area equals the source pixels
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:28Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-56-OUT-GATE` **No invented people** - HIGH; the person gate checks every outpaint result; a result with an added person is retried with the next seed, at most 6 seeds, and the job ends failed when none passes
+  - evidence: tests/test_studio_jobs.py::test_person_gate_retries_seeds_and_fails_after_six green; make test 153 passed, 0 failed
+  - test: fake gate failing seeds 42-44, assert seed 45 kept; failing all six, assert the job failed
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:28Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-57-VID-H3` **MiniMax H3 video** - HIGH; the video generator animates the selected image with MiniMax H3 at the recorded revision and settings, no negative prompt and no CFG, then FILM-interpolates to 30 fps
+  - evidence: tests/test_studio_jobs.py::test_video_runs_h3_at_the_recorded_settings_then_film green; make test 153 passed, 0 failed
+  - test: fake ComfyUI captures the graph, assert H3 revision, 20 steps, res_multistep/simple, positive-only guider; assert interpolation runs
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:28Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [ ] `ACC-STUDIO-58-VID-OPTIONS` **Video options** - HIGH; the video form offers 5, 6 or 10 s, a long side of 1024 or 480 px with the aspect of the source, both sides multiples of 16, and a seed defaulting to 42; a 16:9 source animates at 16:9
+  - test: portrait source at the 1024 preset, assert 768x1024 and the native length for each duration
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:28Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+  - log: 2026-10-27T21:56:04Z @kj amended text "the video form offers 5, 6 or 10 s, 1024x768 or 480x320 in the orientation of the source, and a seed defaulting to 42" -> "the video form offers 5, 6 or 10 s, a long side of 1024 or 480 px with the aspect of the source, both sides multiples of 16, and a seed defaulting to 42; a 16:9 source animates at 16:9"
+  - log: 2026-10-27T21:56:04Z @kj reopened: live run: a 16:9 source was cropped to 4:3; evidence retired: tests/test_studio_frames.py::test_video_size_follows_the_source_orientation_and_duration + tests/test_studio_jobs.py::test_video_job_uses_exactly_the_submitted_prompt green; make test 153 passed, 0 failed
+- [x] `ACC-STUDIO-59-VID-CHAIN` **Animate the result** - MEDIUM; a finished outpaint result has an action that selects it as the video input
+  - evidence: tests/functional/test_studio_page.py::test_animate_this_selects_the_outpaint_result green; make test 153 passed, 0 failed
+  - test: UI test: finish a fake outpaint, click animate, assert the video input names the result
+  - test-tags: FUNCTIONAL
+  - log: 2026-10-27T20:09:28Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-60-PROMPT-H3` **H3 prompt builder** - HIGH; the prompter assembles the fields action, camera, hold, soundscape and music into the official H3 grammar: alignment line, blank line, integrated_multimodal_description, overall_soundscape, non_diegetic_music
+  - evidence: tests/test_studio_prompts.py::test_h3_prompt_matches_the_recipe_template green; make test 153 passed, 0 failed
+  - test: build from fixed fields, assert byte-equal to the h3-recipe template
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:29Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-61-PROMPT-PRESET` **Production prompt preset** - MEDIUM; for an image whose stem has an archived production prompt under data/external/<campaign>/prompts, the prompter offers that prompt as a preset
+  - evidence: tests/test_studio_prompts.py::test_archived_production_prompt_is_offered_as_preset green; make test 153 passed, 0 failed
+  - test: select IMG_0020, assert the preset equals the archived block
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:29Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-62-PROMPT-EDIT` **Final prompt editable** - MEDIUM; the assembled prompt is shown as editable text before submit, and the job uses exactly the submitted text
+  - evidence: tests/test_studio_jobs.py::test_video_job_uses_exactly_the_submitted_prompt + tests/functional/test_studio_page.py::test_edited_final_prompt_is_submitted green; make test 153 passed, 0 failed
+  - test: edit the assembled text, submit, assert the graph prompt equals it
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:29Z @kj added
+  - log: 2026-10-27T21:23:39Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-63-PROMPT-SAVE` **Prompts kept per image** - MEDIUM; the last submitted prompts are saved per image and job kind and reload when that image is selected again
+  - evidence: tests/test_studio_api.py::test_submitted_prompts_are_saved_per_image_and_kind + tests/functional/test_studio_page.py::test_prompts_restore_when_the_image_is_selected_again green; make test 153 passed, 0 failed
+  - test: submit, reload the page, reselect the image, assert the fields are restored
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:29Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [ ] `ACC-STUDIO-64-PROGRESS` **Live progress** - HIGH; each job shows its stage (queued, starting server, loading model, sampling step n of N, decoding, interpolating, done, failed, cancelled) and a percent, refreshed at least every 2 s while it runs
+  - test: fake ComfyUI emits progress events, poll the job endpoint, assert stage and percent advance
+  - test-tags: UNIT, FUNCTIONAL
+  - log: 2026-10-27T20:09:29Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+  - log: 2026-10-27T21:56:04Z @kj reopened: live run: decoding and interpolating stages not reported (DEF STUDIO PROGRESS-STAGES); evidence retired: tests/test_studio_jobs.py::test_comfyui_events_advance_stage_and_percent + tests/functional/test_studio_page.py::test_job_progress_bar_advances green; make test 153 passed, 0 failed
+- [x] `ACC-STUDIO-65-PROGRESS-FAIL` **Edge: failed job** - HIGH; a failed job shows its error and stops its progress; an out-of-memory failure names the GPU and its memory
+  - evidence: tests/test_studio_jobs.py::test_out_of_memory_fails_the_job_naming_the_gpu + tests/functional/test_studio_page.py::test_cancel_and_failure_show_on_the_job green; make test 153 passed, 0 failed
+  - test: fake ComfyUI raises out of memory, assert the failed stage and the GPU name in the message
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:30Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-66-QUEUE` **One job at a time** - HIGH; jobs run one at a time on the selected GPU in submission order; later jobs wait as queued
+  - evidence: tests/test_studio_jobs.py::test_jobs_run_one_at_a_time_in_submission_order green; make test 153 passed, 0 failed
+  - test: submit 3 fake jobs, assert sequential start order
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:30Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-67-CANCEL` **Cancel a job** - MEDIUM; a queued job can be cancelled; a running job is interrupted through ComfyUI's interrupt endpoint and ends cancelled
+  - evidence: tests/test_studio_jobs.py::test_cancel_removes_a_queued_job_and_interrupts_a_running_one green; make test 153 passed, 0 failed
+  - test: cancel a queued and a running fake job, assert cancelled and the interrupt call
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:30Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-68-SIDECAR` **Result sidecar** - CRITICAL; every result image or clip gets a .md sidecar naming the source file, model, prompt, negative prompt, settings, seed, GPU and render time
+  - evidence: tests/test_studio_jobs.py::test_every_result_has_a_sidecar_with_the_provenance green; make test 153 passed, 0 failed
+  - test: run fake jobs, assert the sidecar fields
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:30Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-69-LATEST` **Latest result only** - MEDIUM; a new job of the same kind on the same source moves the previous result and its sidecar to the trash with trash-put
+  - evidence: tests/test_studio_jobs.py::test_new_job_trashes_the_previous_result_of_the_same_source green; make test 153 passed, 0 failed
+  - test: run two fake jobs on one source, assert the first result went to trash-put
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:30Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-70-IDLE-STOP` **Idle server stops** - MEDIUM; the ComfyUI server stops after 15 min without a job and when the studio exits, freeing the GPU memory
+  - evidence: tests/test_studio_jobs.py::test_server_stops_after_15_minutes_idle_and_on_close green; make test 153 passed, 0 failed
+  - test: fake clock past 15 min idle, assert stop; SIGINT, assert stop
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:31Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-71-PORT-TAKEN` **Edge: port in use** - MEDIUM; starting the studio on a port already in use exits non-zero with a message naming the port
+  - evidence: tests/test_studio_cli.py::test_port_in_use_exits_non_zero_naming_the_port green; make test 153 passed, 0 failed
+  - test: bind 8520, run the CLI on it, assert a non-zero exit and the message
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:31Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-72-RESTART` **Edge: restart** - MEDIUM; after a studio restart, finished results are listed again from disk, and a job that was running is shown failed as interrupted
+  - evidence: tests/test_studio_jobs.py::test_restart_lists_results_and_fails_interrupted_jobs green; make test 153 passed, 0 failed
+  - test: write job records, restart the app object, assert the listing and the interrupted state
+  - test-tags: UNIT
+  - log: 2026-10-27T20:09:31Z @kj added
+  - log: 2026-10-27T21:23:40Z @kj closed: verified by studio-build
+- [x] `ACC-STUDIO-73-LIVE-OUTPAINT` **Live outpaint job** - HIGH; one outpainting job completed on a real GPU through the CLI-launched studio
+  - evidence: live run through .venv/bin/henryk-media studio on GPU 2 (RTX PRO 5000 72GB): job 20261027-222824-252e7c outpainted IMG_0020 to 16:9 at 1280 (1280x720, cfg 1.0, person gate passed with seed 42) in 33 s, 21.3 s render, peak 21.01 GB; result tmp/media/studio-live/state/jobs/20261027-222824-252e7c/IMG_0020.png with its sidecar IMG_0020.md naming Studio GPU index 2; tmp/workflows/studio/live.json
+  - test: launch the CLI, outpaint IMG_0020 to 16:9 at 1280 on GPU 2, assert the result and its sidecar
+  - test-tags: FUNCTIONAL
+  - log: 2026-10-27T20:09:31Z @kj added
+  - log: 2026-10-27T21:30:23Z @kj edited test "launch the CLI, outpaint IMG_0020 to 16:9 at 1280 on GPU 1, assert the result and its sidecar" -> "launch the CLI, outpaint IMG_0020 to 16:9 at 1280 on GPU 2, assert the result and its sidecar"
+  - log: 2026-10-27T21:50:46Z @kj closed: closed: verified by studio-docs
+- [x] `ACC-STUDIO-74-LIVE-VIDEO` **Live H3 job** - HIGH; one MiniMax H3 job completed on a real GPU through the CLI-launched studio
+  - evidence: CLI-launched studio on GPU 2: MiniMax H3 job 20261027-223015-d78a61 animated the outpaint result, 1024x768, 5 s, seed 42, in 440 s, peak 74.43 GB; result tmp/media/studio-live/state/jobs/20261027-223015-d78a61/IMG_0020.mp4, 30 fps, 150 frames; sidecar IMG_0020.md names Studio GPU index 2; tmp/workflows/studio/live.json
+  - test: launch the CLI, animate the outpaint result on GPU 2, assert a 30 fps clip and its sidecar
+  - test-tags: FUNCTIONAL
+  - log: 2026-10-27T20:09:31Z @kj added
+  - log: 2026-10-27T21:30:23Z @kj edited test "launch the CLI, animate the outpaint result on GPU 1, assert a 30 fps clip and its sidecar" -> "launch the CLI, animate the outpaint result on GPU 2, assert a 30 fps clip and its sidecar"
+  - log: 2026-10-27T21:51:12Z @kj closed: verified by studio-docs
+
+## README illustrations `README`
+
+Drawings, purpose text, studio section and studio screenshot in the root README
+
+- log: 2026-10-27T20:09:32Z @kj category created
+
+- [x] `ACC-README-75-DRAWINGS` **Two drawings** - MEDIUM; the README shows the two drawings of the father and Henry, programming together and watching the result, drawn locally from IMG_0020 and from Henry in IMG_8840 with the girl excluded; the programming screen shows a frame of the IMG_8840 clip, the watching screen the cat from the birthday video; each has a provenance sidecar
+  - evidence: ref-verify.json PASS 8 of 8 (programming drawing) and watch-verify.json PASS 7 of 7 (watching drawing, cat on the screen) in tmp/workflows/readme-drawings/; README lines 7 and 13 resolve to both WebPs; both .images_readme sidecars name their three references, the girl excluded and local generation on 127.0.0.1
+  - test: open the README, assert both images resolve and both sidecars name the three references and the excluded girl
+  - test-tags: MANUAL
+  - log: 2026-10-27T20:09:32Z @kj added
+  - log: 2026-10-27T20:37:59Z @kj amended text "the README shows the two drawings of the father and Henry, programming together and watching the result, each with a sidecar stating text-only generation with no photo input" -> "the README shows the two drawings of the father and Henry, programming together and watching the result, drawn locally from IMG_0020, from Henry in IMG_8840 with the girl excluded, and from a frame of the IMG_8840 clip; each has a provenance sidecar"
+  - log: 2026-10-27T20:37:59Z @kj edited test "open the README, assert both images resolve and both sidecars state text-only generation" -> "open the README, assert both images resolve and both sidecars name the three references and the excluded girl"
+  - log: 2026-10-27T21:22:39Z @kj amended text "the README shows the two drawings of the father and Henry, programming together and watching the result, drawn locally from IMG_0020, from Henry in IMG_8840 with the girl excluded, and from a frame of the IMG_8840 clip; each has a provenance sidecar" -> "the README shows the two drawings of the father and Henry, programming together and watching the result, drawn locally from IMG_0020 and from Henry in IMG_8840 with the girl excluded; the programming screen shows a frame of the IMG_8840 clip, the watching screen the cat from the birthday video; each has a provenance sidecar"; reason: the watching drawing now shows the cat from the birthday video on its screen, at the Star Colonel's request
+  - log: 2026-10-27T21:51:12Z @kj closed: verified by studio-docs
+- [x] `ACC-README-76-PURPOSE` **Purpose section** - MEDIUM; the README opens with a Purpose section adapted from henryk-analysis, stating no age, no duration in years, nothing about the court, the therapist or the mother
+  - evidence: README.md opens with ## Purpose (lines 3-16), now ended by the new ## Overview heading; a grep of the section text for digits, year, age, old, court, judge, custody, lawyer, therapist, psychologist, counsellor, mother, mum, mom, wife and divorce finds only the 4:3 aspect ratio
+  - test: read the section, grep for ages, years and the excluded subjects
+  - test-tags: MANUAL
+  - log: 2026-10-27T20:09:32Z @kj added
+  - log: 2026-10-27T21:50:46Z @kj closed: closed: verified by studio-docs
+- [x] `ACC-README-77-STUDIO-DOC` **Studio section** - MEDIUM; the README has a Studio section with the CLI launch command and the proxy URL form
+  - evidence: README ## Studio (lines 34-54) gives .venv/bin/henryk-media studio, its four options and the proxy URL form ${JUPYTERHUB_SERVICE_PREFIX:-/}proxy/<port>/; the CLI-launched studio answered in tmp/workflows/studio/live.json; the README command run at 22:50 answered GET / 200 and /api/gpus and exited 0 on SIGINT (logs/studio-live.log)
+  - test: run the command from the README, assert the server answers
+  - test-tags: MANUAL
+  - log: 2026-10-27T20:09:32Z @kj added
+  - log: 2026-10-27T21:51:12Z @kj closed: verified by studio-docs
+- [x] `ACC-README-78-SCREENSHOT` **Studio screenshot** - HIGH; the README shows a screenshot of the running studio whose only photo is IMG_0020, the Star Colonel's own, authorised by him on 2026-10-27; no other photo, thumbnail or photo file name appears
+  - evidence: README ## Studio shows .images_readme/studio.png, a 1440x900 capture of the running studio taken 2026-10-27T22:45; tmp/workflows/studio/screenshot.json only_img_0020 true: both pictures are generated from IMG_0020 and the only file names on the page are IMG_0020.jpeg and IMG_0020.png; sidecar .images_readme/studio.md
+  - test: view the screenshot, assert one photo and no other file names
+  - test-tags: MANUAL
+  - log: 2026-10-27T20:09:32Z @kj added
+  - log: 2026-10-27T21:50:46Z @kj closed: closed: verified by studio-docs
 

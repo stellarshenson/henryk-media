@@ -1,8 +1,25 @@
 # henryk-media
 
-Generation and manipulation of media for Henry, a child. The first campaign extends birthday photos
-into landscape frames and animates each frame into a 10 second clip. Every model runs on the
-workstation GPUs, and no photo or clip is sent to an external service.
+## Purpose
+
+I make these generated media for my alienated son, Henry. I build them with the same hope as my recordings and my other projects for him. My hope is that one day he will see this work and know that I love him.
+
+![Drawing of a father and his son programming together on a computer](.images_readme/father-and-henry-programming.webp)
+
+The project started with a few photos of Henry from his kindergarten, taken by the kindergarten staff with a phone. They are some of the few photos of him that I have. The project extends each photo to a 4:3 frame and animates it into a living photo, so that I can put these live photos into his birthday video and into other videos for him. Every video is its own subproject in this repository, and there will be many of them.
+
+At the same time I am building a reusable set of tools that will help me with future videos. I hope it also inspires other people who have a few still photos of their loved ones: to extend them and animate them, like the moving photos in the newspapers of the Harry Potter books, and to bring a little joy and love into their lives by seeing their loved ones smile, move and dance once more.
+
+![Drawing of a father and his son on a sofa watching the result together on the computer](.images_readme/father-and-henry-watching.webp)
+
+This project is built with the hope that one day I will be able to share it with him. I make these media so that one day Henry can see them together with me and smile.
+
+## Overview
+
+Generation and manipulation of media for Henry, a child. The first subproject,
+`henryk-urodziny-2026` for his birthday video, extends the kindergarten photos into 4:3 and 16:9
+frames and animates the 4:3 frames into 10 second clips. Every model runs on the workstation GPUs,
+and no photo or clip is sent to an external service.
 
 ## How it works
 
@@ -14,12 +31,34 @@ workstation GPUs, and no photo or clip is sent to an external service.
 - FILM interpolates the native frames to 30 fps, 300 frames per clip
 - The models run through ComfyUI servers bound to `127.0.0.1`; nothing is sent to an external service
 
+## Studio
+
+The studio is a local web page that outpaints a photo with FLUX 3 Klein and animates an image into
+a clip with MiniMax H3, on one workstation GPU.
+
+```bash
+.venv/bin/henryk-media studio
+```
+
+- `--port` - the port to listen on, default `8520`
+- `--host` - the IPv4 loopback address to listen on, default `127.0.0.1`; any other address is refused
+- `--state-dir` - the folder for uploads, saved prompts and results, default `tmp/media/studio`; a folder under `data/` is refused
+- `--input-root` - a folder the photo picker lists, repeatable; the default is the project data folders
+- The command prints the proxy URL `${JUPYTERHUB_SERVICE_PREFIX:-/}proxy/<port>/`, with the trailing slash
+- To open the page in JupyterLab, replace `/lab` and everything after it in the browser address bar with `proxy/8520/`
+- The page lists every GPU with its name, total and free memory; the user chooses one GPU, and every job runs on it
+- The studio refuses a job whose recorded peak memory is above the memory the chosen GPU has available
+- Results and their `.md` sidecars go to `tmp/media/studio/jobs/<job id>/`; the studio writes nothing under `data/`
+
+![Screenshot of the studio page with a finished video job and a finished outpaint job](.images_readme/studio.png)
+
 ## Where the pieces live
 
 - `notebooks/henryk-urodziny-2026/` - `01-kj-image-extender.ipynb` through
   `05-kj-minimax-h3.ipynb`, in execution order
 - `src/henryk_media/imaging/` - extender, person gate, composite, provenance, registry and server
 - `src/henryk_media/animation/` - image-to-video client, FILM interpolation, LivePortrait wrappers
+- `src/henryk_media/studio/` - the studio command, web server, job queue, GPU list and page
 - `.agents/skills/` - the `image-outpainting` and `image-to-video` working recipes
 - `docs/model-selection/` - the research guides and decision records
 - `docs/acc-crit.md` and `docs/defects.md` - the acceptance-criteria and defects trackers
@@ -34,6 +73,7 @@ workstation GPUs, and no photo or clip is sent to an external service.
 - A bench or test render writes under `tmp/media/` and never into `data/`
 - Notebooks link photos and clips by relative path and never embed them
 - Notebooks are committed with outputs cleared; `RELEASE.md` is the checklist
+- The studio screenshot shows IMG_0020, the Star Colonel's own photo, published with his authorisation; no photo of Henry is in the repository
 
 ## Setup
 
@@ -82,7 +122,8 @@ make install
 ├── reports/              <- generated analysis and figures
 ├── src/henryk_media/
 │   ├── animation/
-│   └── imaging/
+│   ├── imaging/
+│   └── studio/
 ├── tests/
 ├── tmp/                  <- scratch and bench renders (gitignored)
 ├── Makefile, pyproject.toml

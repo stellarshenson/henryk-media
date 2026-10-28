@@ -29,7 +29,7 @@ from henryk_media.imaging.provenance import ExtendResult, load_extend, save_exte
 from henryk_media.imaging.registry import Extender
 from henryk_media.imaging.server import ComfyServer, out_of_memory
 
-ASPECTS = {"4x3": 4 / 3, "16x9": 16 / 9}  # the two frames every extender renders
+ASPECTS = {"1x1": 1.0, "4x3": 4 / 3, "3x2": 3 / 2, "16x9": 16 / 9}  # the frames extend() accepts
 FEATHER = 8  # blend band along the photo's border, in photo pixels
 FALLBACK_SCALES = (1.0, 0.71, 0.5)  # render-area scales tried after an out-of-memory failure
 SEEDS = 6  # seed attempts before a tile is kept and marked failed
@@ -123,6 +123,7 @@ def extend(
     negative_prompt: str,
     gate: PersonGate,
     seed: int = 42,
+    width: int = composite.BASE_WIDTH,
 ) -> ExtendResult:
     """Extend one photo to one landscape frame with one model.
 
@@ -130,12 +131,13 @@ def extend(
         server: The running ComfyUI server.
         model: The extender to run.
         source: The photo to extend.
-        aspect: ``4x3`` or ``16x9``.
+        aspect: ``1x1``, ``4x3``, ``3x2`` or ``16x9``.
         output: Destination PNG; the sidecar and checkpoint are written beside it.
         prompt: Positive prompt for every model.
         negative_prompt: Negative prompt for every model.
         gate: The no-new-people gate every composited frame must pass.
         seed: First graph seed; a rejected frame advances to the next seed.
+        width: Width of the saved frame; the height follows from the aspect.
 
     Returns:
         The image's provenance and measurements, also saved as sidecar and checkpoint.
@@ -148,7 +150,7 @@ def extend(
         raise ValueError(f"unknown aspect {aspect!r}; use one of {sorted(ASPECTS)}")
     with Image.open(source) as opened:
         photo = opened.convert("RGB")
-    geometry = composite.Geometry.for_aspect(photo.size, ASPECTS[aspect], FEATHER)
+    geometry = composite.Geometry.for_aspect(photo.size, ASPECTS[aspect], FEATHER, width)
     extended_size = geometry.extended(photo.size)
     photo_in_frame = geometry.photo_size(photo.size)
     settings = dict(model.settings)

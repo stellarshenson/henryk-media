@@ -47,26 +47,32 @@ class Geometry:
 
     @classmethod
     def for_aspect(
-        cls, photo_size: tuple[int, int], aspect: float, feather: int = 8
+        cls,
+        photo_size: tuple[int, int],
+        aspect: float,
+        feather: int = 8,
+        width: int = BASE_WIDTH,
     ) -> "Geometry":
-        """Return the geometry that widens a photo to a ``BASE_WIDTH`` frame of ``aspect``.
+        """Return the geometry that widens a photo to a ``width`` frame of ``aspect``.
 
-        The width is the fixed number and the height follows from the aspect. The photo is
+        The width is the fixed number and the height follows from the aspect, rounded to a
+        multiple of 16 so 4:3 and 16:9 at 1280 stay exact (960, 720). The photo is
         scaled to that height, so it keeps its own aspect after that one scale, and only the
         two sides are generated. The visible side pads are equal up to the odd column left by
         an odd difference. Padding to a multiple of the 16 px latent patch (8 px VAE stride
         times the 2 px transformer patch) and of the 8 px VAE stride adds at most 8 columns on
-        the right and 7 rows below; the saved frame drops them again, so the output has the
-        requested aspect exactly.
+        the right; the saved frame drops them again, so the output is width x height; 3:2 at
+        1024 and 1280 and 16:9 at 1920 land within 1 % of the aspect (1024x688, 1280x848,
+        1920x1088).
 
         Args:
             photo_size: (width, height) of the photo in pixels.
             aspect: Target width / height, for example 4 / 3.
             feather: Width of the paste-back blend band.
+            width: Width of the saved frame, ``BASE_WIDTH`` by default.
         """
         photo_width, photo_height = photo_size
-        width = BASE_WIDTH
-        height = round(width / aspect)
+        height = 16 * round(width / aspect / 16)
         scaled_width = round(photo_width * height / photo_height)
         side = (width - scaled_width) // 2
         stride_extra = round_up(width, 2 * VAE_STRIDE) - width

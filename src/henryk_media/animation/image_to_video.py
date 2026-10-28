@@ -131,8 +131,9 @@ def clip_settings(
     values: dict[str, object],
     settings: dict[str, object],
     source: Path,
+    target_frames: int = FRAMES,
 ) -> dict[str, object]:
-    """Return the sidecar settings of one clip.
+    """Return the sidecar settings of one clip, ``target_frames`` at FPS.
 
     The graph values are recorded under the marker name in lowercase without braces
     (``{{NEGATIVE_PROMPT}}`` becomes ``negative_prompt``), followed by the model's own settings,
@@ -148,7 +149,7 @@ def clip_settings(
         **settings,
         "native_fps": setup.native_fps,
         "fps": FPS,
-        "frames": FRAMES,
+        "frames": target_frames,
         "interpolation": INTERPOLATION,
         "source_mtime_ns": source_stat.st_mtime_ns,
         "source_bytes": source_stat.st_size,
@@ -175,7 +176,8 @@ def api(port: int, path: str, payload: dict | None = None) -> dict:
     request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data)
     try:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            return json.loads(response.read())
+            body = response.read()
+            return json.loads(body) if body else {}  # /interrupt and /free answer 200, no body
     except urllib.error.HTTPError as error:
         raise RuntimeError(f"ComfyUI {path}: HTTP {error.code} {error.read().decode()}") from error
 
@@ -201,8 +203,8 @@ def gpu_free_mib(uuid: str) -> int:
     return int(subprocess.run(query, capture_output=True, text=True, check=True).stdout)
 
 
-def interpolate(native: Path, clip: Path, gpu: str) -> None:
-    """Write ``clip`` at ``FPS`` with ``FRAMES`` frames, interpolated from ``native`` on ``gpu``.
+def interpolate(native: Path, clip: Path, gpu: str, target_frames: int = FRAMES) -> None:
+    """Write ``clip`` at ``FPS`` with ``target_frames`` frames, interpolated from ``native``.
 
     The worker runs in ComfyUI's environment, which holds the pinned FILM model code and PyTorch
     build; it imports nothing from this package.
@@ -228,7 +230,7 @@ def interpolate(native: Path, clip: Path, gpu: str) -> None:
         "--fps",
         str(FPS),
         "--frames",
-        str(FRAMES),
+        str(target_frames),
     ]
     subprocess.run(command, cwd=COMFYUI_DIR, env=environment, check=True)
 
@@ -367,11 +369,12 @@ class Server:
         variant: str,
         values: dict[str, object],
         settings: dict[str, object],
+        target_frames: int = FRAMES,
     ) -> ClipResult:
         """Render one photo into one 30 fps clip, restoring a finished clip with equal settings.
 
         A checkpoint restores only when model, revision, settings and source fingerprint match and
-        the clip probes as FRAMES frames at FPS; any other clip is rendered again.
+        the clip probes as ``target_frames`` frames at FPS; any other clip is rendered again.
 
         Args:
             source: Working copy to animate.
@@ -380,25 +383,26 @@ class Server:
             values: Workflow markers and their values, for example ``{"{{PROMPT}}": "..."}``.
                 The module sets ``{{IMAGE}}`` and ``{{FILENAME_PREFIX}}`` itself.
             settings: Model settings recorded in the sidecar, for example steps and cfg.
+            target_frames: Frames of the interpolated clip at FPS, FRAMES (10 s) by default.
 
         Returns:
             The clip's provenance and measurements, also saved as sidecar and checkpoint.
 
         Raises:
             RuntimeError: If the graph fails, the rendered rate differs from the setup's
-                native_fps, the native clip is too short for FRAMES at FPS, or the interpolated
-                clip does not hold FRAMES frames at FPS.
+                native_fps, the native clip is too short for target_frames at FPS, or the
+                interpolated clip does not hold target_frames frames at FPS.
             TimeoutError: If the GPU does not free enough memory for the interpolation.
             subprocess.CalledProcessError: If the interpolation worker fails.
         """
-        expected = clip_settings(self.setup, values, settings, source)
+        expected = clip_settings(self.setup, values, settings, source, target_frames)
         finished = load_result(clip)
         if finished is not None and restore_matches(finished, self.setup, expected):
             try:
                 _, _, frames, fps = probe_clip(clip)
                 problem = (
                     None
-                    if frames == FRAMES and abs(fps - FPS) <= 0.01
+                    if frames == target_frames and abs(fps - FPS) <= 0.01
                     else f"{frames} frames at {fps:g} fps"
                 )
             except Exception as error:  # noqa: BLE001 - any decoder failure re-renders
@@ -426,20 +430,20 @@ class Server:
                     f"the graph rendered {native_fps:g} fps but the setup records "
                     f"{self.setup.native_fps:g} fps"
                 )
-            if (frames - 1) / native_fps < (FRAMES - 1) / FPS:
+            if (frames - 1) / native_fps < (target_frames - 1) / FPS:
                 raise RuntimeError(
                     f"the graph rendered {frames} frames at {native_fps:g} fps, too short "
-                    f"for {FRAMES} frames at {FPS} fps"
+                    f"for {target_frames} frames at {FPS} fps"
                 )
             clip.parent.mkdir(parents=True, exist_ok=True)
             trash([clip, clip.with_suffix(".md")])
             self.free_gpu()
-            interpolate(native, clip, self.setup.gpu)
+            interpolate(native, clip, self.setup.gpu, target_frames)
         width, height, frames, fps = probe_clip(clip)
-        if frames != FRAMES or abs(fps - FPS) > 0.01:
+        if frames != target_frames or abs(fps - FPS) > 0.01:
             raise RuntimeError(
                 f"the interpolated clip has {frames} frames at {fps:g} fps, expected "
-                f"{FRAMES} frames at {FPS} fps"
+                f"{target_frames} frames at {FPS} fps"
             )
         result = ClipResult(
             clip=project_relative(clip),

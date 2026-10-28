@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuses a push whose new commits hold a file that fails the photo guard, so a --no-verify commit
+# cannot reach a remote (.githooks/photo_guard.py, RELEASE.md)
+exec python3 "$(dirname "$0")/photo_guard.py" pre-push "$1"

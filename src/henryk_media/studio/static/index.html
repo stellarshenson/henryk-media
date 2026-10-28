@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Henryk studio</title>
+<link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+<header>
+  <h1>Henryk studio</h1>
+  <p>Outpaint a photo with FLUX 3 Klein and animate an image with MiniMax H3 on one GPU.</p>
+</header>
+<main>
+  <section id="gpu-panel" aria-labelledby="gpu-heading">
+    <h2 id="gpu-heading">GPU</h2>
+    <fieldset>
+      <legend>Run every job on</legend>
+      <div id="gpu-list"></div>
+    </fieldset>
+    <button type="button" id="gpu-refresh">Refresh the GPU list</button>
+    <p class="error" id="gpu-error" role="alert"></p>
+  </section>
+
+  <section id="image-panel" aria-labelledby="image-heading">
+    <h2 id="image-heading">Image</h2>
+    <label for="image-select">Pick an image</label>
+    <select id="image-select" size="10"></select>
+    <label for="upload-file">Upload an image (JPEG, PNG or WebP)</label>
+    <input type="file" id="upload-file" accept="image/jpeg,image/png,image/webp">
+    <button type="button" id="upload-button">Upload</button>
+    <p class="error" id="image-error" role="alert"></p>
+    <figure id="preview-figure" hidden>
+      <img id="preview" alt="Preview of the selected image">
+      <figcaption id="preview-label"></figcaption>
+    </figure>
+  </section>
+
+  <section id="outpaint-panel" aria-labelledby="outpaint-heading">
+    <h2 id="outpaint-heading">Outpaint</h2>
+    <div id="outpaint-form">
+      <div class="row">
+        <div><label for="out-aspect">Aspect ratio</label>
+          <select id="out-aspect">
+            <option value="1x1">1:1</option>
+            <option value="4x3" selected>4:3</option>
+            <option value="3x2">3:2</option>
+            <option value="16x9">16:9</option>
+          </select></div>
+        <div><label for="out-width">Width</label>
+          <select id="out-width">
+            <option value="1024">1024 px</option>
+            <option value="1280" selected>1280 px</option>
+            <option value="1536">1536 px</option>
+            <option value="1920">1920 px</option>
+          </select></div>
+        <div><label for="out-cfg">cfg</label>
+          <input type="number" id="out-cfg" value="1.0" min="0.1" max="100" step="0.1"></div>
+      </div>
+      <label for="out-prompt">Prompt</label>
+      <textarea id="out-prompt" rows="6"></textarea>
+      <label for="out-negative">Negative prompt</label>
+      <textarea id="out-negative" rows="3"></textarea>
+      <p class="note" id="cfg-note" aria-live="polite"></p>
+      <button type="button" class="primary" id="out-generate">Generate outpaint</button>
+      <p class="error" id="out-error" role="alert"></p>
+    </div>
+  </section>
+
+  <section id="video-panel" aria-labelledby="video-heading">
+    <h2 id="video-heading">Video</h2>
+    <div id="video-form">
+      <p>Video input: <strong id="video-input">none selected</strong></p>
+      <label for="vid-action">Action</label>
+      <textarea id="vid-action" rows="3" aria-describedby="hint-action"></textarea>
+      <small id="hint-action">The scene as the photo shows it; one action with a visible start and a clear end</small>
+      <label for="vid-camera">Camera</label>
+      <input type="text" id="vid-camera" aria-describedby="hint-camera">
+      <small id="hint-camera">Static Shot, or one move with a speed such as at slow speed</small>
+      <label for="vid-hold">Hold</label>
+      <textarea id="vid-hold" rows="2" aria-describedby="hint-hold"></textarea>
+      <small id="hint-hold">The hands, props, background people and cut edges as the photo shows them, in positive words</small>
+      <label for="vid-soundscape">Soundscape</label>
+      <textarea id="vid-soundscape" rows="2" aria-describedby="hint-soundscape"></textarea>
+      <small id="hint-soundscape">Non-verbal room tone and action sound; empty becomes N/A</small>
+      <label for="vid-music">Music</label>
+      <input type="text" id="vid-music" aria-describedby="hint-music">
+      <small id="hint-music">N/A when the clip needs no score</small>
+      <label for="vid-prompt">Final prompt (the job uses this text; editing a field above rebuilds it)</label>
+      <textarea id="vid-prompt" rows="9"></textarea>
+      <button type="button" id="vid-preset" hidden>Use the production prompt</button>
+      <div class="row">
+        <div><label for="vid-duration">Duration</label>
+          <select id="vid-duration">
+            <option value="5">5 s</option>
+            <option value="6">6 s</option>
+            <option value="10" selected>10 s</option>
+          </select></div>
+        <div><label for="vid-resolution">Resolution</label>
+          <select id="vid-resolution">
+            <option value="1024x768" selected>1024 px long side</option>
+            <option value="480x320">480 px long side</option>
+          </select></div>
+        <div><label for="vid-seed">Seed</label>
+          <input type="number" id="vid-seed" value="42" min="0" step="1"></div>
+      </div>
+      <small>The clip keeps the input's aspect; this is its long side.</small>
+      <button type="button" class="primary" id="vid-generate">Generate video</button>
+      <p class="error" id="vid-error" role="alert"></p>
+    </div>
+  </section>
+
+  <section id="jobs-panel" aria-labelledby="jobs-heading">
+    <h2 id="jobs-heading">Jobs</h2>
+    <p id="jobs-empty">No jobs yet.</p>
+    <ol id="jobs"></ol>
+  </section>
+</main>
+<script src="static/app.js"></script>
+</body>
+</html>
