@@ -1,0 +1,1 @@
+- [Studio presentation preferences](feedback_studio_presentation.md) - local "27 Oct 2026, 22:30" times, file names not paths, no stale progress, GalaxaLabs DL

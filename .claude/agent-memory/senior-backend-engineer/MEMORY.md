@@ -1,0 +1,9 @@
+- [LivePortrait repository](reference_liveportrait_repo.md) - repo moved to KlingAIResearch (curl -L); expression-friendly is a no-op for still photos
+- [Vault and gated HF downloads](reference_vault_hf_gated.md) - vault auto-locks after 30 m and needs a click; parallel callers get one click; gated repos need the Star Colonel's acceptance
+- [NAS model store](reference_nas_model_store.md) - writes about 50 MB/s but reads can collapse to MB/s; other sessions mutate the store; verify per file and resumable
+- [Local server port checks](reference_local_server_port_checks.md) - ss shows no listeners here; verify with curl and GPU memory
+- [ComfyUI bundled templates](reference_comfyui_templates.md) - official graph JSONs live in the venv package; real nodes under definitions.subgraphs[0]
+- [Wan2.2 fallback](project_wan22_fallback.md) - discarded if LTX-2.5 and MiniMax H3 look believable; 80 min per clip vs 450-470 s
+- [MiniMax H3 render](reference_minimax_h3_render.md) - 435-474 s per 5 s clip, 63-66 GB peak; no negative conditioning; FILM drops audio
+- [Headless notebook runs](reference_headless_notebook_runs.md) - kernel_name=python3 runs the venv; rich Progress output is lost; IOPub timeout is harmless
+- [Verify child media locally](feedback_verify_child_media_locally.md) - never Read Henry's frames; measure with local OpenCV and YOLO on CPU, state the visual limit
