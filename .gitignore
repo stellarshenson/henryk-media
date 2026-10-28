@@ -1,6 +1,7 @@
 # Logs and temporary working directories
 /logs/
 /tmp/
+/graphify-out/
 
 # Third-party photo-animation code and weights - recreate with the commands in models/photo-animation.md
 /models/photo-animation/
