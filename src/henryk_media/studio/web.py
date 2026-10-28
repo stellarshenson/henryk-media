@@ -99,10 +99,6 @@ def handler(studio: Studio) -> type[BaseHTTPRequestHandler]:
                 if not (file.is_file() and file.resolve().parent == STATIC.resolve()):
                     raise ApiError(404, "not found")
                 self.send_file(file)
-            elif method == "GET" and path == "/api/gpus":
-                self.send_json(200, studio.gpu_list())
-            elif method == "POST" and path == "/api/gpu":
-                self.send_json(200, studio.select_gpu(self.body().get("index")))
             elif method == "GET" and path == "/api/images":
                 self.send_json(200, {"images": studio.images()})
             elif method == "GET" and path == "/api/file":

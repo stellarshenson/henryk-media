@@ -140,8 +140,12 @@ class ComfyServer:
         finally:
             trash([path for path, mtime in self.work_files().items() if before.get(path) != mtime])
 
-    def run(self, graph: dict) -> tuple[dict, float, int]:
+    def run(self, graph: dict, client_id: str | None = None) -> tuple[dict, float, int]:
         """Submit a graph and wait for it to finish.
+
+        Args:
+            graph: The filled graph.
+            client_id: The websocket client ComfyUI sends the graph's events to; None sends none.
 
         Returns:
             (its history entry, wall seconds from submission to the finished entry, highest GPU
@@ -153,7 +157,9 @@ class ComfyServer:
         """
         peak_mib = gpu_used_mib(self.setup.gpu)
         start = time.perf_counter()
-        prompt_id = api(self.setup.port, "/prompt", {"prompt": graph})["prompt_id"]
+        prompt_id = api(self.setup.port, "/prompt", {"prompt": graph, "client_id": client_id})[
+            "prompt_id"
+        ]
         deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
         while prompt_id not in (history := api(self.setup.port, f"/history/{prompt_id}")):
             if time.monotonic() > deadline:

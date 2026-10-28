@@ -1,6 +1,12 @@
 """Tests for the no-new-people gate's pure rules: panels, inside fraction and verdict text."""
 
+from pathlib import Path
+from types import SimpleNamespace
+
+from PIL import Image
+
 from henryk_media.imaging.gate import (
+    PersonGate,
     detection_kind,
     detection_text,
     inside_fraction,
@@ -160,3 +166,25 @@ def test_gate_lines_state_the_clipped_count_beside_the_other_counts() -> None:
 
 def test_gate_lines_say_so_when_no_gate_was_recorded() -> None:
     assert gate_lines({}) == "- Gate: not recorded\n"
+
+
+def test_vertical_check_classifies_boxes_by_the_panels_above_and_below() -> None:
+    def model(boxes: list[tuple], label: int) -> SimpleNamespace:
+        result = SimpleNamespace(
+            boxes=SimpleNamespace(xyxy=boxes, conf=[0.9] * len(boxes), cls=[label] * len(boxes)),
+            names={0: "person" if label == 0 else "face"},
+        )
+        return SimpleNamespace(predict=lambda *args, **kwargs: [result])
+
+    gate = PersonGate(Path("unused"))
+    stranger, crossing = (150.0, 20.0, 200.0, 80.0), (150.0, 90.0, 200.0, 130.0)
+    gate._models = {
+        "face": model([stranger, crossing], 0),
+        "person": model([(100.0, 450.0, 200.0, 550.0)], 0),
+    }
+    verdict = gate.check(Image.new("RGB", (400, 600)), 100, 400, True)  # photo rows 100-500
+    assert verdict["panels"] == [[0, 100], [500, 600]] and verdict["axis"] == "y"
+    assert [item["box"] for item in verdict["violations"]] == [list(stranger)]
+    assert [item["box"] for item in verdict["continuations"]] == [list(crossing)]
+    assert verdict["passed"] is False and verdict["clipped"] == []
+    assert "axis" not in gate.check(Image.new("RGB", (600, 400)), 100, 400)

@@ -35,7 +35,7 @@ OUTPAINT = {  # a valid outpaint job body for the portrait IMG_0001
     "kind": "outpaint",
     "ref": "0/IMG_0001.jpg",
     "aspect": "16x9",
-    "width": 1280,
+    "resolution": 720,
     "prompt": "extend the room",
     "negative_prompt": "person",
     "cfg": 1.0,
@@ -45,7 +45,7 @@ VIDEO = {  # a valid video job body for the portrait IMG_0001
     "ref": "0/IMG_0001.jpg",
     "prompt": "he smiles",
     "duration": 10,
-    "resolution": "1024x768",
+    "resolution": 720,
     "seed": 42,
 }
 
@@ -152,6 +152,7 @@ class FakeServer(StudioServer):
         self.baseline_mib = 500
         self.graphs: list[dict] = []
         self.interrupts = 0
+        self.releases = 0
         self.stopped = 0
         self.instances.append(self)
 
@@ -180,6 +181,9 @@ class FakeServer(StudioServer):
     def interrupt(self) -> None:
         self.interrupts += 1
 
+    def release_models(self) -> None:
+        self.releases += 1
+
     def stop(self) -> None:
         self.stopped += 1
 
@@ -198,16 +202,23 @@ def fake_server(tmp_path: Path) -> type[FakeServer]:
 
 
 class FakeGate:
-    """The person gate with scripted verdicts: the first ``fail`` checks find a stranger."""
+    """The person gate with scripted verdicts: the first ``fail`` checks find a stranger, and
+    ``detections`` returns ``people`` (detector, label, confidence, box) for every photo."""
 
-    def __init__(self, fail: int = 0) -> None:
+    def __init__(self, fail: int = 0, people: tuple = ()) -> None:
         self.fail = fail
+        self.people = list(people)
         self.checks = 0
 
     def signatures(self) -> dict[str, str]:
         return {"face": "fake face", "person": "fake person"}
 
-    def check(self, frame: Image.Image, photo_left: int, photo_width: int) -> dict:
+    def detections(self, frame: Image.Image) -> list[tuple]:
+        return self.people
+
+    def check(
+        self, frame: Image.Image, photo_left: int, photo_width: int, vertical: bool = False
+    ) -> dict:
         self.checks += 1
         stranger = {
             "detector": "person",
@@ -220,7 +231,10 @@ class FakeGate:
         violations = [stranger] if self.checks <= self.fail else []
         return {
             "passed": not violations,
-            "panels": [[0, photo_left], [photo_left + photo_width, frame.width]],
+            "panels": [
+                [0, photo_left],
+                [photo_left + photo_width, frame.height if vertical else frame.width],
+            ],
             "rule": "fake rule",
             "violations": violations,
             "continuations": [],
@@ -236,11 +250,13 @@ class FakeGenerator:
         self.release = threading.Event()
         self.started = threading.Event()
         self.jobs: list[str] = []
+        self.releases: list[int] = []  # the server's model releases when each run started
         if not block:
             self.release.set()
 
     def run(self, job, server, folder: Path) -> Path:
         self.jobs.append(job.id)
+        self.releases.append(server.releases)
         server.node_types = dict(SAMPLER_TYPES)
         self.started.set()
         for event in self.events:

@@ -1,4 +1,4 @@
-"""Tests for the studio's picker, uploads, path guard, narrow-photo refusal and saved prompts."""
+"""Tests for the studio's picker, uploads, path guard and saved prompts."""
 
 import http.client
 import io
@@ -33,6 +33,17 @@ def test_upload_is_stored_and_listed(make_studio, serve, tmp_path) -> None:
     assert (tmp_path / "state/uploads/myphoto.png").read_bytes() == data
     assert body in client.get("/api/images")[1]["images"]
     assert client.get(f"/api/file?ref={quote(body['ref'])}") == (200, data)
+
+
+def test_phone_jpeg_with_several_pictures_is_stored_as_jpg(make_studio, serve, tmp_path) -> None:
+    client = serve(make_studio())
+    buffer = io.BytesIO()
+    noise((40, 30)).save(buffer, format="MPO", append_images=[noise((40, 30), seed=1)])
+    data = buffer.getvalue()
+    status, body = client.call("POST", "/api/uploads?name=phone.jpeg", data, "image/jpeg")
+    assert status == 201, body
+    assert body["ref"].endswith(".jpg")
+    assert (tmp_path / "state/uploads/phone.jpg").read_bytes() == data
 
 
 def test_upload_under_a_used_name_with_other_bytes_is_refused(
@@ -89,23 +100,8 @@ def test_paths_outside_the_roots_return_404(make_studio, serve) -> None:
     assert client.get("/api/file?ref=0/IMG_0001.jpg")[0] == 200
 
 
-def test_photo_already_wide_is_refused(make_studio, serve) -> None:
-    client = serve(make_studio())
-    client.post("/api/gpu", {"index": 1})
-    status, body = client.post(
-        "/api/jobs", {**OUTPAINT, "ref": "0/WIDE_0002.jpg", "aspect": "4x3"}
-    )
-    assert status == 400
-    assert body["error"] == (
-        "the photo (1600x900) is already as wide as 4x3 or wider; nothing is left to extend"
-    )
-    assert client.post("/api/jobs", {**OUTPAINT, "ref": "0/WIDE_0002.jpg"})[0] == 400  # 16:9
-    assert client.get("/api/jobs")[1]["jobs"] == []
-
-
 def test_submitted_prompts_are_saved_per_image_and_kind(make_studio, serve) -> None:
     client = serve(make_studio())
-    client.post("/api/gpu", {"index": 1})
     fields = {
         "action": "he waves",
         "camera": "Static Shot",

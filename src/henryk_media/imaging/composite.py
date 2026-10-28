@@ -1,6 +1,7 @@
 """Frame geometry, tone matching, resampling and the paste-back guarantee of the extender.
 
-A model fills the added side panels, so no model may touch the child's pixels. The photo is scaled
+A model fills the added side panels (above and below for ``VerticalGeometry``), so no model may
+touch the child's pixels. The photo is scaled
 once to the frame height, every rendered frame is tone-matched to it over the region they share,
 and the photo is pasted back at that size. A feathered border of ``feather`` pixels blends the
 paste into the fill; every pixel at least ``feather`` pixels inside the photo's border is
@@ -52,27 +53,29 @@ class Geometry:
         aspect: float,
         feather: int = 8,
         width: int = BASE_WIDTH,
+        height: int | None = None,
     ) -> "Geometry":
         """Return the geometry that widens a photo to a ``width`` frame of ``aspect``.
 
         The width is the fixed number and the height follows from the aspect, rounded to a
-        multiple of 16 so 4:3 and 16:9 at 1280 stay exact (960, 720). The photo is
-        scaled to that height, so it keeps its own aspect after that one scale, and only the
-        two sides are generated. The visible side pads are equal up to the odd column left by
-        an odd difference. Padding to a multiple of the 16 px latent patch (8 px VAE stride
-        times the 2 px transformer patch) and of the 8 px VAE stride adds at most 8 columns on
-        the right; the saved frame drops them again, so the output is width x height; 3:2 at
-        1024 and 1280 and 16:9 at 1920 land within 1 % of the aspect (1024x688, 1280x848,
-        1920x1088).
+        multiple of 16 so 4:3 and 16:9 at 1280 stay exact (960, 720), unless ``height`` gives
+        it. The photo is scaled to that height, so it keeps its own aspect after that one
+        scale, and only the two sides are generated. The visible side pads are equal up to the
+        odd column left by an odd difference. Padding to a multiple of the 16 px latent patch
+        (8 px VAE stride times the 2 px transformer patch) adds at most 15 columns on the right
+        and 15 rows at the bottom; the saved frame drops them again, so the output is width x
+        height; 3:2 at 1024 and 1280 and 16:9 at 1920 land within 1 % of the aspect (1024x688,
+        1280x848, 1920x1088).
 
         Args:
             photo_size: (width, height) of the photo in pixels.
             aspect: Target width / height, for example 4 / 3.
             feather: Width of the paste-back blend band.
             width: Width of the saved frame, ``BASE_WIDTH`` by default.
+            height: Height of the saved frame; by default ``width / aspect`` rounded to 16.
         """
         photo_width, photo_height = photo_size
-        height = 16 * round(width / aspect / 16)
+        height = height or 16 * round(width / aspect / 16)
         scaled_width = round(photo_width * height / photo_height)
         side = (width - scaled_width) // 2
         stride_extra = round_up(width, 2 * VAE_STRIDE) - width
@@ -80,7 +83,7 @@ class Geometry:
             pad_left=side,
             pad_right=width - scaled_width - side + stride_extra,
             pad_top=0,
-            pad_bottom=round_up(height, VAE_STRIDE) - height,
+            pad_bottom=round_up(height, 2 * VAE_STRIDE) - height,
             feather=feather,
             width=width,
             height=height,
@@ -103,6 +106,45 @@ class Geometry:
     def resized(self, photo: Image.Image) -> Image.Image:
         """Return the photo at the saved frame's height, keeping its aspect."""
         return photo.resize(self.photo_size(photo.size), RESAMPLE)
+
+
+@dataclass(frozen=True)
+class VerticalGeometry(Geometry):
+    """How a landscape photo grows into a taller frame: the mirror of ``Geometry``.
+
+    The photo is scaled to the frame width and only the panels above and below it are
+    generated. ``pad_bottom`` carries the odd row and, like ``pad_right``, the padding to the
+    16 px latent patch; the saved frame drops that padding.
+    """
+
+    @classmethod
+    def for_size(
+        cls, photo_size: tuple[int, int], size: tuple[int, int], feather: int = 8
+    ) -> "VerticalGeometry":
+        """Return the geometry that grows a photo to a ``size`` frame above and below.
+
+        Args:
+            photo_size: (width, height) of the photo in pixels.
+            size: (width, height) of the saved frame.
+            feather: Width of the paste-back blend band.
+        """
+        width, height = size
+        scaled_height = round(photo_size[1] * width / photo_size[0])
+        top = (height - scaled_height) // 2
+        return cls(
+            pad_left=0,
+            pad_right=round_up(width, 2 * VAE_STRIDE) - width,
+            pad_top=top,
+            pad_bottom=round_up(height, 2 * VAE_STRIDE) - scaled_height - top,
+            feather=feather,
+            width=width,
+            height=height,
+        )
+
+    def photo_size(self, photo_size: tuple[int, int]) -> tuple[int, int]:
+        """Return the photo's size in the saved frame: scaled to the frame width."""
+        width, height = photo_size
+        return self.width, round(height * self.width / width)
 
 
 def target_size(extended: tuple[int, int], factor: float = 2.0) -> tuple[int, int]:

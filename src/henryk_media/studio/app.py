@@ -1,8 +1,8 @@
-"""The studio core: GPU selection, the image roots, uploads, prompts and the job queue.
+"""The studio core: the automatic GPU choice, the image roots, uploads, prompts and the job queue.
 
-One ``threading.Condition`` guards the jobs, the queue, the selected GPU and the one ComfyUI
-server. One worker thread runs the jobs in submission order; on every WAIT_SECONDS wait without a
-job it calls ``tick``, which stops a server idle for IDLE_SECONDS. A job's record is written to
+One ``threading.Condition`` guards the jobs, the queue and the one ComfyUI server. One worker
+thread runs the jobs in submission order; on every WAIT_SECONDS wait without a job it calls
+``tick``, which stops a server idle for IDLE_SECONDS. A job's record is written to
 ``<state>/jobs/<id>/job.json`` at every state change; progress lives in memory. Nothing is written
 outside the state folder and the ComfyUI work folders.
 """
@@ -23,19 +23,27 @@ from PIL import Image
 
 from henryk_media.animation.advanced_liveportrait import trash
 from henryk_media.config import EXTERNAL_DATA_DIR, PROCESSED_DATA_DIR, RAW_DATA_DIR
-from henryk_media.imaging.composite import Geometry
-from henryk_media.imaging.extender import ASPECTS, FEATHER
+from henryk_media.imaging.extender import ASPECTS
 from henryk_media.imaging.server import out_of_memory
 from henryk_media.studio import prompts
 from henryk_media.studio.comfy import StudioServer, advance, comfy_setup, free_port
-from henryk_media.studio.generators import DURATIONS, SIZES, Generator, oriented_size
-from henryk_media.studio.gpus import Gpu, gb, list_gpus, need_gb
+from henryk_media.studio.generators import (
+    DURATIONS,
+    LOCAL_FRAMES,
+    PRESETS,
+    Generator,
+    clip_size,
+    frame_step,
+    h3_size,
+    oriented_size,
+    preset_size,
+)
+from henryk_media.studio.gpus import choose, gb, list_gpus, need_gb
 
 SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".md"}  # files /api/file serves
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 UPLOAD_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 UPLOAD_LIMIT = 50_000_000
-WIDTHS = (1024, 1280, 1536, 1920)
 KINDS = ("outpaint", "video")
 TERMINAL = ("done", "failed", "cancelled")
 IDLE_SECONDS = 900
@@ -63,7 +71,7 @@ class Job:
     kind: str
     path: str
     label: str
-    gpu: dict
+    gpu: dict | None  # chosen when the job starts; always None for a crop or scale
     params: dict
     created: str
     state: str = "queued"
@@ -76,6 +84,7 @@ class Job:
     finished: str | None = None
     result: str | None = None
     sidecar: str | None = None
+    after: str | None = None  # the frame job whose result a pipeline video animates
     cancel: bool = False
     sampler_seen: bool = False
 
@@ -100,10 +109,15 @@ def hidden(relative: Path) -> bool:
 
 
 def describe(kind: str, params: dict) -> str:
-    """Return the job's name in a refusal message."""
+    """Return the job's name in a refusal message, with the preset and the real size."""
+    size = "x".join(map(str, params["size"]))
     if kind == "outpaint":
-        return f"FLUX 3 Klein outpaint {params['aspect']} at {params['width']} px"
-    return f"MiniMax H3 {params['resolution']} {params['duration']} s"
+        return f"FLUX 3 Klein outpaint {params['aspect']} {PRESETS[params['resolution']]} {size}"
+    render = "x".join(map(str, params["render"]))
+    return (
+        f"MiniMax H3 {PRESETS[params['resolution']]} {size} (rendered at {render}) "
+        f"{params['duration']} s"
+    )
 
 
 class Studio:
@@ -144,7 +158,6 @@ class Studio:
         self.lock = threading.Condition()
         self.jobs: dict[str, Job] = {}
         self.queue: deque[str] = deque()
-        self.selected: Gpu | None = None
         self.server: StudioServer | None = None
         self.running: Job | None = None
         self.closed = False
@@ -217,7 +230,8 @@ class Studio:
         try:
             with Image.open(io.BytesIO(data), formats=list(UPLOAD_FORMATS)) as image:
                 image.load()
-                suffix = UPLOAD_FORMATS[image.format]
+                # Pillow names a JPEG holding several pictures (iPhone) MPO
+                suffix = UPLOAD_FORMATS["JPEG" if image.format == "MPO" else image.format]
         except (OSError, ValueError, Image.DecompressionBombError) as error:
             raise ApiError(400, f"not a JPEG, PNG or WebP image: {error}") from error
         stem = re.sub(r"[^A-Za-z0-9._-]", "", Path(name).stem).lstrip(".")[:100] or "upload"
@@ -246,56 +260,55 @@ class Studio:
             preset = None if text is None else {"prompt": text}
         return {"saved": prompts.load_saved(self.prompts_dir, kind, path), "preset": preset}
 
-    # --- GPUs ------------------------------------------------------------------------------
-
-    def gpu_list(self) -> dict:
-        """Return the nvidia-smi rows in GB and the selected index."""
-        rows = self.gpus()
-        with self.lock:
-            selected = None if self.selected is None else self.selected.index
-        return {
-            "gpus": [
-                {
-                    "index": row.index,
-                    "uuid": row.uuid,
-                    "name": row.name,
-                    "total_gb": round(gb(row.total_mib), 1),
-                    "free_gb": round(gb(row.free_mib), 1),
-                }
-                for row in rows
-            ],
-            "selected": selected,
-        }
-
-    def select_gpu(self, index: object) -> dict:
-        """Select one GPU; refused while a job waits or runs, stops a server on another GPU."""
-        row = next((row for row in self.gpus() if type(index) is int and row.index == index), None)
-        if row is None:
-            raise ApiError(400, f"no GPU with index {index!r}")
-        with self.lock:
-            if self.queue or self.running is not None:
-                raise ApiError(409, "a job is queued or running; change the GPU when it ends")
-            if self.server is not None and self.server.setup.gpu != row.uuid:
-                self.stop_server()
-            self.selected = row
-        return {"selected": row.index}
-
     # --- jobs ------------------------------------------------------------------------------
 
     def submit(self, body: dict) -> Job:
-        """Validate one job, check that it fits the selected GPU and queue it.
+        """Validate one job, check that a GPU's total memory can hold it and queue it.
+
+        An outpaint body with a ``video`` object (the video fields without kind and ref) is a
+        pipeline: the frame job and, right behind it in the queue, a video job whose input is the
+        frame job's result. Both are validated before either is queued.
+
+        Returns:
+            The job, or the frame job of a pipeline.
 
         Raises:
-            ApiError: 400 for an invalid field, no GPU, a photo already wide or a recorded peak
-                above the GPU total; 404 for the ref; 409 for a peak above the free memory.
+            ApiError: 400 for an invalid field or an estimated peak above every GPU's total; 404
+                for the ref. A frame step that crops or scales needs no GPU and is never
+                fit-checked; the GPU itself is chosen when the job starts.
         """
+        video = body.get("video")
+        if video is not None and (body.get("kind") != "outpaint" or not isinstance(video, dict)):
+            raise ApiError(400, "only an outpaint job takes a video, as a JSON object")
+        bodies, jobs = [body], [self.prepare(body)]
+        if video is not None:  # the clip takes the aspect and size of the frame it animates
+            bodies.append({**video, "kind": "video", "ref": body.get("ref")})
+            jobs.append(self.prepare(bodies[1], jobs[0].params["size"]))
+        for item, job in zip(bodies, jobs, strict=True):
+            fields = {
+                key: value for key, value in item.items() if key not in ("kind", "ref", "video")
+            }
+            prompts.save_submitted(self.prompts_dir, job.kind, Path(job.path), fields)
+            (self.jobs_dir / job.id).mkdir()
+        if video is not None:  # the worker sets the input to the frame result when it starts
+            frame, then = jobs
+            then.after, then.path, then.label = frame.id, str(self.jobs_dir / frame.id), frame.id
+        with self.lock:
+            for job in jobs:  # one lock: no job can be queued between the frame and its video
+                self.jobs[job.id] = job
+                self.queue.append(job.id)
+                self.write(job)
+            self.lock.notify_all()
+        return jobs[0]
+
+    def prepare(self, body: dict, size: tuple[int, int] | None = None) -> Job:
+        """Validate one job body and check that a GPU's total holds it; nothing is written.
+
+        ``size`` replaces the picked image's size as the source of a video: the frame size of
+        a pipeline video."""
         kind = body.get("kind")
         if kind not in KINDS:
             raise ApiError(400, f"unknown kind {kind!r}; use one of {list(KINDS)}")
-        with self.lock:
-            selected = self.selected
-        if selected is None:
-            raise ApiError(400, "select a GPU first")
         path = self.resolve(body.get("ref"))
         if path.suffix.lower() not in IMAGE_SUFFIXES:
             raise ApiError(404, "not found")
@@ -305,87 +318,77 @@ class Studio:
         if kind == "outpaint":
             params = self.outpaint_params(body, path)
         else:
-            params = self.video_params(body)
+            params = self.video_params(body, size or oriented_size(path))
         params["prompt"] = prompt
-        self.fit(kind, params, selected)
+        if params.get("frame") not in LOCAL_FRAMES:  # a crop or scale needs no GPU
+            self.fit(kind, params)
 
-        job = Job(
+        return Job(
             id=f"{datetime.now():%Y%m%d-%H%M%S}-{secrets.token_hex(3)}",
             kind=kind,
             path=str(path),
             label=self.entry(path)["label"],
-            gpu={
-                "index": selected.index,
-                "name": selected.name,
-                "uuid": selected.uuid,
-                "total_gb": round(gb(selected.total_mib), 1),
-            },
+            gpu=None,
             params=params,
             created=now(),
         )
-        fields = {key: value for key, value in body.items() if key not in ("kind", "ref")}
-        prompts.save_submitted(self.prompts_dir, kind, path, fields)
-        (self.jobs_dir / job.id).mkdir()
-        with self.lock:
-            self.jobs[job.id] = job
-            self.queue.append(job.id)
-            self.write(job)
-            self.lock.notify_all()
-        return job
 
     def outpaint_params(self, body: dict, path: Path) -> dict:
-        """Return the outpaint settings, refusing an aspect the photo already reaches."""
-        aspect, width, cfg = body.get("aspect"), body.get("width", 1280), body.get("cfg", 1.0)
-        negative = body.get("negative_prompt", "")
+        """Return the outpaint settings and the frame step the photo's aspect calls for."""
+        aspect, lines = body.get("aspect"), body.get("resolution", 1080)
+        cfg, negative = body.get("cfg", 1.0), body.get("negative_prompt", "")
         if aspect not in ASPECTS:
             raise ApiError(400, f"unknown aspect {aspect!r}; use one of {list(ASPECTS)}")
-        if width not in WIDTHS or type(width) is not int:
-            raise ApiError(400, f"unknown width {width!r}; use one of {list(WIDTHS)}")
+        if lines not in PRESETS or type(lines) is not int:
+            raise ApiError(400, f"unknown resolution {lines!r}; use one of {list(PRESETS)}")
         if type(cfg) not in (int, float) or not 0 < cfg <= 100:
             raise ApiError(400, f"cfg must be a number above 0 and at most 100, not {cfg!r}")
         if not isinstance(negative, str):
             raise ApiError(400, "the negative prompt must be text")
-        size = oriented_size(path)
-        geometry = Geometry.for_aspect(size, ASPECTS[aspect], FEATHER, width)
-        if geometry.photo_size(size)[0] >= geometry.width:
-            raise ApiError(
-                400,
-                f"the photo ({size[0]}x{size[1]}) is already as wide as {aspect} or wider; "
-                "nothing is left to extend",
-            )
-        return {"aspect": aspect, "width": width, "negative_prompt": negative, "cfg": float(cfg)}
+        return {
+            "aspect": aspect,
+            "resolution": lines,
+            "size": list(preset_size(ASPECTS[aspect], lines)),
+            "negative_prompt": negative,
+            "cfg": float(cfg),
+            "frame": frame_step(oriented_size(path), aspect),
+        }
 
-    def video_params(self, body: dict) -> dict:
-        """Return the video settings."""
-        duration, resolution, seed = (
-            body.get("duration"),
-            body.get("resolution"),
-            body.get("seed", 42),
-        )
+    def video_params(self, body: dict, source_size: tuple[int, int]) -> dict:
+        """Return the video settings: the clip size at the source's aspect and the H3 render."""
+        duration, lines, seed = body.get("duration"), body.get("resolution"), body.get("seed", 42)
         if duration not in DURATIONS or type(duration) is not int:
             raise ApiError(400, f"unknown duration {duration!r}; use one of {list(DURATIONS)}")
-        if resolution not in SIZES:
-            raise ApiError(400, f"unknown resolution {resolution!r}; use one of {list(SIZES)}")
+        if lines not in PRESETS or type(lines) is not int:
+            raise ApiError(400, f"unknown resolution {lines!r}; use one of {list(PRESETS)}")
         if type(seed) is not int or seed < 0:
             raise ApiError(400, f"the seed must be a non-negative integer, not {seed!r}")
-        return {"duration": duration, "resolution": resolution, "seed": seed}
+        size = clip_size(source_size, lines)
+        return {
+            "duration": duration,
+            "resolution": lines,
+            "size": list(size),
+            "render": list(h3_size(size)),
+            "seed": seed,
+        }
 
-    def fit(self, kind: str, params: dict, selected: Gpu) -> None:
-        """Refuse a job whose recorded peak exceeds the GPU's total or available memory."""
-        row = next((row for row in self.gpus() if row.uuid == selected.uuid), selected)
+    def fit(self, kind: str, params: dict) -> None:
+        """Refuse a job whose peak exceeds every local GPU's total memory."""
         need = need_gb(kind, params)
-        name = (
-            f"{describe(kind, params)} needs {need} GB (recorded peak); GPU {row.index} {row.name}"
-        )
-        if need > gb(row.total_mib):
-            raise ApiError(400, f"{name} has {gb(row.total_mib):.1f} GB in total")
-        with self.lock:
-            server = self.server
-        available = row.free_mib
-        if server is not None and server.setup.gpu == row.uuid:
-            available += row.used_mib - server.baseline_mib  # the studio's own models
-        if need > gb(available):
-            raise ApiError(409, f"{name} has {gb(available):.1f} GB available")
+        if need > gb(max((row.total_mib for row in self.gpus()), default=0)):
+            raise ApiError(
+                400,
+                f"{describe(kind, params)} needs {need} GB (estimated from the recorded peaks); "
+                "the workstation cannot provide it",
+            )
+
+    def gpu_need(self, job: Job) -> float:
+        """Return the need to choose by: a pipeline frame also has to hold its clip."""
+        need = need_gb(job.kind, job.params)
+        for other in self.jobs.values():
+            if other.after == job.id and other.state not in TERMINAL:
+                need = max(need, need_gb(other.kind, other.params))
+        return need
 
     def job(self, job_id: str) -> Job:
         """Return one job record, or raise 404."""
@@ -472,13 +475,60 @@ class Studio:
                 if self.closed:
                     return
                 job = self.jobs[self.queue.popleft()]
+                if job.after is not None:  # the frame job ran right before: one worker, FIFO
+                    # a frame cancelled while queued is gone once a same-source outpaint started
+                    frame = self.jobs.get(job.after)
+                    if frame is None or frame.state != "done":
+                        job.error = (frame and frame.error) or (
+                            f"the frame job {job.after} was cancelled"
+                        )
+                        self.finish(job, "failed")
+                        continue
+                    job.path = str(self.jobs_dir / frame.id / frame.result)
+                    job.label = self.entry(Path(job.path))["label"]
                 self.running = job
                 job.state, job.started = "running", now()
-                if self.server is not None and self.server.setup.gpu != job.gpu["uuid"]:
-                    self.stop_server()
-                job.stage, job.percent = (
-                    ("loading model", 5) if self.server is not None else ("starting server", 2)
-                )
+                local = job.params.get("frame") in LOCAL_FRAMES  # crop or scale: no server or GPU
+                if not local:
+                    frame = self.jobs.get(job.after) if job.after else None
+                    if frame is not None and frame.gpu is not None:
+                        job.gpu = frame.gpu  # a pipeline chooses once, for its clip
+                    else:
+                        try:
+                            rows = self.gpus()
+                        except Exception as error:  # noqa: BLE001 - the job fails, not the worker
+                            job.error = f"cannot list the GPUs: {error}"
+                            self.finish(job, "failed")
+                            continue
+                        need = self.gpu_need(job)
+                        server = self.server
+                        held = 0
+                        if server is not None:
+                            row = next((r for r in rows if r.uuid == server.setup.gpu), None)
+                            held = row.used_mib - server.baseline_mib if row is not None else 0
+                        server_gpu = None if server is None else server.setup.gpu
+                        chosen = choose(rows, need, server_gpu, held)
+                        if chosen is None:
+                            job.error = (
+                                f"{describe(job.kind, job.params)} needs {need} GB; "
+                                "the workstation cannot provide it"
+                            )
+                            self.finish(job, "failed")
+                            continue
+                        job.gpu = {
+                            "index": chosen.index,
+                            "name": chosen.name,
+                            "uuid": chosen.uuid,
+                            "total_gb": round(gb(chosen.total_mib), 1),
+                        }
+                    if self.server is not None and self.server.setup.gpu != job.gpu["uuid"]:
+                        self.stop_server()
+                if local:
+                    job.stage, job.percent = "framing", 50
+                elif self.server is not None:
+                    job.stage, job.percent = "loading model", 5
+                else:
+                    job.stage, job.percent = "starting server", 2
                 self.write(job)
                 earlier = [
                     other
@@ -492,38 +542,44 @@ class Studio:
             self.execute(job, [self.jobs_dir / other.id for other in earlier])
 
     def execute(self, job: Job, earlier: list[Path]) -> None:
-        """Trash the earlier results, start the server when none runs, run the generator."""
+        """Trash the earlier results, start the server when the job needs one, run the generator."""
+        local = job.params.get("frame") in LOCAL_FRAMES
         try:
             trash(earlier)  # the latest result of a kind and source only
             with self.lock:
                 server = self.server
-            if server is None:
+            reused = server is not None
+            if server is None and not local:
                 server = self.server_factory(
                     comfy_setup(job.gpu["uuid"], free_port()), self.on_event
                 )
                 with self.lock:
                     self.server = server
                     job.stage, job.percent = "loading model", 5
+            if job.after is not None and reused:
+                server.release_models()  # one model resident: free the frame before the clip
             if job.cancel:
                 raise Cancelled
             result = self.generators[job.kind].run(job, server, self.jobs_dir / job.id)
             sidecar = result.with_suffix(".md")
             with sidecar.open("a") as handle:
-                handle.write(
-                    f"- Picked file: {job.label}\n"
-                    f"- Studio GPU: index {job.gpu['index']}, {job.gpu['name']}, "
-                    f"{job.gpu['uuid']}\n"
-                )
+                handle.write(f"- Picked file: {job.label}\n")
+                if not local:
+                    handle.write(
+                        f"- Studio GPU: index {job.gpu['index']}, {job.gpu['name']}, "
+                        f"{job.gpu['uuid']}\n"
+                    )
         except Exception as error:  # noqa: BLE001 - every failure ends the job, not the worker
             with self.lock:
                 if job.cancel:
                     self.finish(job, "cancelled")
                     return
                 job.error = str(error)
-                if out_of_memory(error):
+                if out_of_memory(error) and not local:  # a crop or scale may have no GPU
                     job.error = (
-                        f"out of memory on GPU {job.gpu['index']} {job.gpu['name']} "
-                        f"({job.gpu['total_gb']} GB): {error}"
+                        f"{describe(job.kind, job.params)} needs "
+                        f"{need_gb(job.kind, job.params)} GB; "
+                        "the workstation cannot provide it"
                     )
                 self.finish(job, "failed")
             return

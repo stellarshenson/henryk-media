@@ -71,7 +71,7 @@ The AdvancedLivePortrait keyframe module and its tests
   - log: 2026-10-26T02:29:38Z @kj residual motion figures lower than the 5 s baseline on part of the delivered 10 s set, no late freeze in any clip; the Star Colonel's view pending
   - log: 2026-10-26T03:13:53Z @kj note: the LTX closure figures came from the pre-split chain clips; the current chain script splits prompts per 5 s part, so a future chain run re-renders those eight and its motion must be re-measured
   - log: 2026-10-26T14:37:01Z @kj regressed as DEF-ANIM-8-SLOWMO-1
-- [ ] `DEF-ANIM-8-SLOWMO-1` **every 6 s clip plays in slow motion** - MAJOR; all 6 s clips move in slow motion and look unnatural, H3 and LTX alike; the Star Colonel named data/processed/henryk-urodziny-2026/minimax-h3-6s/IMG_8564.mp4 and IMG_8716.mp4; cause under investigation; data/processed/henryk-urodziny-2026/minimax-h3-6s/ and tmp/media/ltx25-i2v-6s/
+- [-] `DEF-ANIM-8-SLOWMO-1` **every 6 s clip plays in slow motion** - MAJOR; all 6 s clips move in slow motion and look unnatural, H3 and LTX alike; the Star Colonel named data/processed/henryk-urodziny-2026/minimax-h3-6s/IMG_8564.mp4 and IMG_8716.mp4; cause under investigation; data/processed/henryk-urodziny-2026/minimax-h3-6s/ and tmp/media/ltx25-i2v-6s/
   - test-tags: FUNCTIONAL, MANUAL
   - related: ACC-VIDEO-29-LIVING
   - repro: play data/processed/henryk-urodziny-2026/minimax-h3-10s/IMG_8716.mp4 and IMG_8564.mp4 at normal speed; the motion reads as slow motion
@@ -83,12 +83,13 @@ The AdvancedLivePortrait keyframe module and its tests
   - log: 2026-10-26T22:16:17Z @kj attempted: 4 prompts on IMG_8564; motion per second (ratio to M0) and near-duplicate: M1 rate sentence 22.7819 (0.96x), 0.2575; M2 larger action 21.7818 (0.92x), 0.2642; M3 continuous motion 24.5455 (1.03x), 0.2308; M0 23.7881, 0.2441; the Star Colonel views; tmp/media/h3-speech-slowmo/
   - log: 2026-10-27T00:00:32Z @kj attempted: M1, M2, M3 at 1024x768; motion per second 20.4553/16.8435/33.0849 against the 1024 control 4.9773 and the delivered clip 16.572; near-duplicate 0.2776/0.5217/0.0435 against 0.9967 and 0.4816; the Star Colonel views; tmp/media/h3-confirm-1024/
   - log: 2026-10-27T02:43:55Z @kj attempted: IMG_8716 pacing variants at 10 s; motion per second and near-duplicate - R1 9.735/0.8361, R2 12.8441/0.6555 against the simple control 7.3901/0.903 and the delivered 7.0287/0.9532; both stems now have a measured pacing variant; the Star Colonel views; tmp/media/h3-slowmo-8716/
+  - log: 2026-10-28T12:46:27Z @kj rejected: rejected by the Star Colonel 2026-10-28: the clip campaign is finished, he has all the clips he needs; no fix is claimed
 - [-] `DEF-ANIM-9-CHILD-DRIFT` **background child walks off and loses the ball in the IMG_7666 clip** - MAJOR; the small child behind Henry leaves the photo's pose, walks left and no longer holds the black-and-white ball; the source has her standing still with the ball at the chest; found by the 10 s no-talk gate at frame 82; data/processed/henryk-urodziny-2026/minimax-h3-10s/IMG_7666.mp4
   - repro: play IMG_7666.mp4 from frame 82; the background child walks left without the ball
   - test-tags: FUNCTIONAL, MANUAL
   - log: 2026-10-26T01:10:56Z @kj added
   - log: 2026-10-26T02:00:18Z @kj rejected: not a defect: the Star Colonel's own saved prompt of 2026-10-25 21:14 asks 'the child behind him is removed from the image'; the clip follows that instruction and she walks out of frame; prompts/user-2026-10-25T2208/IMG_7666.json holds the text
-- [ ] `DEF-ANIM-10-TALKING10S` **ten second H3 clips animate the mouth as speech** - MAJOR; many clips show Henry's mouth moving as if talking; the Star Colonel said "many movies have Henry talking"; the highest mouth-screen ratios are IMG_7667 1.99 and IMG_8779 1.94 against the 2.0 flag; cause under investigation
+- [-] `DEF-ANIM-10-TALKING10S` **ten second H3 clips animate the mouth as speech** - MAJOR; many clips show Henry's mouth moving as if talking; the Star Colonel said "many movies have Henry talking"; the highest mouth-screen ratios are IMG_7667 1.99 and IMG_8779 1.94 against the 2.0 flag; cause under investigation
   - related: ACC-VIDEO-30-SCENE
   - related: DEF-ANIM-7-SPEECH-GRIN
   - root-cause: 2026-10-26T14:37:31Z @kj the ten second beat shape names smile and grin shape changes; H3 generates audio jointly and renders the shape change as speech; the 5 s fix pinned the lips and teeth, the 10 s beats reintroduced the change
@@ -101,6 +102,7 @@ The AdvancedLivePortrait keyframe module and its tests
   - log: 2026-10-27T00:00:30Z @kj attempted: Chinese stillness S5 at 1024x768; mouth median new/control/delivered 3.5648/5.7885/5.1028, ratio to baseline 1.423; the 480x320 0.02x lead did not hold; the Star Colonel views; tmp/media/h3-confirm-1024/IMG_7667-S5.mp4
   - log: 2026-10-27T01:13:46Z @kj attempted: 3 prompts on IMG_7667 at 1024x768; mouth median and ratio to S5 3.5648 / control 5.7885 - T1 4.2228 1.1846/0.7295, T2 3.2561 0.9134/0.5625, T3 6.3584 1.7837/1.0985; T3 changes head action to a very slight tilt, so its figures measure that package; the Star Colonel views; tmp/media/h3-speech-iter-1024/
   - log: 2026-10-27T13:15:41Z @kj attempted: IMG_7667 U1 N/A/N/A and U2 fields omitted at 1024x768; native audio not silent - U1 mean -47.8 max -37.6 dB, U2 mean -42.5 max -29.2 dB against -50; mouth median U1 3.2781, U2 3.4573 against T2 3.2561 and control 5.7885; the Star Colonel views
+  - log: 2026-10-28T12:46:27Z @kj rejected: rejected by the Star Colonel 2026-10-28: the clip campaign is finished, he has all the clips he needs; no fix is claimed
 
 ## Image extender `EXTEND`
 
@@ -129,19 +131,33 @@ Defects of the local studio server
 
 - log: 2026-10-27T21:55:58Z @kj category created
 
-- [ ] `DEF-STUDIO-11-H3-CROP` **H3 crops a wide source to 4:3** - MAJOR; a 16:9 outpaint result animated at 1024x768 loses the outpainted panels: the MiniMax H3 node cover-crops the input to the canvas (comfy_extras/nodes_minimax_h3.py _resize center), and the studio sizes the video at 4:3 or 3:2 whatever the source aspect
+- [x] `DEF-STUDIO-11-H3-CROP` **H3 crops a wide source to 4:3** - MAJOR; a 16:9 outpaint result animated at 1024x768 loses the outpainted panels: the MiniMax H3 node cover-crops the input to the canvas (comfy_extras/nodes_minimax_h3.py _resize center), and the studio sizes the video at 4:3 or 3:2 whatever the source aspect
+  - evidence: live pipeline frame 20261028-145745-dc5f64 (1920x1080) fed to H3 job 20261028-145745-e48830: clip 1280x720, aspect_ok true, frame0_mad [10.22, 10.536, 10.345], horizontal scale scan best 1.0; tests/test_studio_frames.py::test_frame_fed_to_h3_keeps_its_aspect and ::test_clip_renders_on_the_32_step_and_crops_to_the_preset green; reshoot-live.json
   - related: ACC-STUDIO-58-VID-OPTIONS
   - repro: live run: outpaint IMG_0020 to 16:9 at 1280x720, animate the result at 1024x768; the clip shows the centre 4:3 only
+  - root-cause: 2026-10-28T12:47:39Z @kj the MiniMax H3 node stretches the input to the canvas (nodes_minimax_h3.py first_frame resize, not the AddGuide crop); the studio sized every clip 4:3 or 3:2; the first fix (video_size keeping the source aspect, short side rounded to 32) still stretched 3 of 8 aspect and size pairs, 16:9 at 480x320 by 5.5 percent; fixed by rendering at the preset size rounded up to the 32-pixel step from the frame scaled to cover it, then centre-cropping the clip to the exact preset size
   - root-cause: 2026-10-27T21:55:58Z @kj video size taken from the preset (1024x768 or 480x320) and the source orientation only, never from the source aspect; the H3 node centre-crops to that size
   - log: 2026-10-27T21:55:58Z @kj added
-- [ ] `DEF-STUDIO-12-PROGRESS-STAGES` **Progress skips decoding and interpolating** - MEDIUM; during a live job the stages decoding and interpolating never appear; the bar stays at sampling 88 until done (outpaint 7 s, video 42 s)
+  - log: 2026-10-28T12:47:39Z @kj root-cause overridden; reason: records the disproved first fix and the final fix together, so the stretch is not re-diagnosed as a crop
+  - log: 2026-10-28T15:22:19Z @kj closed
+- [x] `DEF-STUDIO-12-PROGRESS-STAGES` **Progress skips decoding and interpolating** - MEDIUM; during a live job the stages decoding and interpolating never appear; the bar stays at sampling 88 until done (outpaint 7 s, video 42 s)
+  - evidence: live H3 job 20261028-145745-e48830: decoding at 2026-10-28T15:05:43, interpolating at 15:06:06, done at 15:06:23; tests/test_studio_jobs.py::test_graph_is_queued_with_the_listener_client_id green; reshoot-live.json
   - related: ACC-STUDIO-64-PROGRESS
   - repro: live run: watch the job endpoint during the H3 job; no decoding or interpolating stage is reported
   - root-cause: 2026-10-27T21:55:58Z @kj prompts are queued without a client_id, so ComfyUI sends executing and progress events for later nodes only to that client; the interpolating stage, run by the studio itself, is not set before FILM starts
   - log: 2026-10-27T21:55:58Z @kj added
-- [ ] `DEF-STUDIO-13-H3-PEAK` **H3 memory need recorded too low** - MEDIUM; the memory table assumes 66.156 GB for H3 1024x768 5 s; the live job peaked at 74.43 GB after an outpaint in the same ComfyUI process, so a GPU with 66.2 to 74.4 GB free is admitted and then runs out of memory
+  - log: 2026-10-28T15:22:19Z @kj closed
+- [-] `DEF-STUDIO-13-H3-PEAK` **H3 memory need recorded too low** - MEDIUM; the memory table assumes 66.156 GB for H3 1024x768 5 s; the live job peaked at 74.43 GB after an outpaint in the same ComfyUI process, so a GPU with 66.2 to 74.4 GB free is admitted and then runs out of memory
   - related: ACC-STUDIO-43-GPU-FIT
   - repro: live run sidecar tmp/media/studio-live/state/jobs/20261027-223015-d78a61/IMG_0020.md peak 74.43 GB against the table value 66.156 GB
   - root-cause: 2026-10-27T21:55:58Z @kj the table value comes from a fresh-process production run; a warm process holding the Klein model adds the difference
   - log: 2026-10-27T21:55:58Z @kj added
+  - log: 2026-10-28T12:47:39Z @kj rejected: rejected by the Star Colonel 2026-10-28: the 74.43 GB peak was read in a ComfyUI process that still held the Klein model, which ComfyUI frees on demand, so it shows no H3 need above the recorded 66.156 GB (review round 1 ruling)
+- [x] `DEF-STUDIO-14-KLEIN-PEAK` **Klein memory estimate ignores the frame size** - MAJOR; The studio's fit check uses one FLUX 3 Klein peak (OUTPAINT_GB = 21.317 GB in src/henryk_media/studio/gpus.py) for every outpaint frame size; larger frames need more memory, so a frame job can be admitted on a GPU it does not fit and run out of memory
+  - evidence: tests/test_studio_gpus.py::test_klein_estimate_meets_every_recorded_row and ::test_klein_frame_fit_follows_the_frame_size pass (UHD 4K frame refused on GPU 0 25.7 GB at 27.48 GB, Full HD admitted at 22.054 GB, a 2880x2160 crop admitted without a fit); patch tmp/workflows/studio/patches/owner/5.patch; live rows from tmp/workflows/studio/reshoot-live.json: 21.43 GB at 1080x1080, 22.08 GB at 1920x1080, 27.48 GB at 3840x2160
+  - repro: a UHD 4K frame job on GPU 0 (25.7 GB): the fit check admits it at 21.317 GB; the live UHD job peaked at 27.48 GB (reshoot-live.json uhd_frame)
+  - test-tags: UNIT
+  - root-cause: 2026-10-28T13:40:31Z @kj one recorded row at 1280x960 is used for every frame size; Klein's peak grows with the frame's pixel count (21.43 GB at 1080x1080, 22.08 GB at 1920x1080, 27.48 GB at 3840x2160)
+  - log: 2026-10-28T13:40:31Z @kj added
+  - log: 2026-10-28T13:43:48Z @kj closed: fixed
 

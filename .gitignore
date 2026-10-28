@@ -11,6 +11,10 @@
 !/data/**/
 !/data/**/*.md
 !/data/**/.gitkeep
+# the owner showcase: the three files the photo guard admits by sha256 (.githooks/showcase.sha256)
+!/data/external/showcase/IMG_0020.jpeg
+!/data/external/showcase/IMG_0020-frame-16x9-fullhd.png
+!/data/external/showcase/IMG_0020-clip-hd-5s.mp4
 
 # Mac OS-specific storage files
 .DS_Store

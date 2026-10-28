@@ -124,8 +124,9 @@ def extend(
     gate: PersonGate,
     seed: int = 42,
     width: int = composite.BASE_WIDTH,
+    geometry: composite.Geometry | None = None,
 ) -> ExtendResult:
-    """Extend one photo to one landscape frame with one model.
+    """Extend one photo to one frame with one model.
 
     Args:
         server: The running ComfyUI server.
@@ -138,6 +139,8 @@ def extend(
         gate: The no-new-people gate every composited frame must pass.
         seed: First graph seed; a rejected frame advances to the next seed.
         width: Width of the saved frame; the height follows from the aspect.
+        geometry: The frame geometry, replacing the one ``aspect`` and ``width`` give; a
+            ``composite.VerticalGeometry`` grows the photo above and below.
 
     Returns:
         The image's provenance and measurements, also saved as sidecar and checkpoint.
@@ -150,7 +153,10 @@ def extend(
         raise ValueError(f"unknown aspect {aspect!r}; use one of {sorted(ASPECTS)}")
     with Image.open(source) as opened:
         photo = opened.convert("RGB")
-    geometry = composite.Geometry.for_aspect(photo.size, ASPECTS[aspect], FEATHER, width)
+    geometry = geometry or composite.Geometry.for_aspect(
+        photo.size, ASPECTS[aspect], FEATHER, width
+    )
+    vertical = isinstance(geometry, composite.VerticalGeometry)
     extended_size = geometry.extended(photo.size)
     photo_in_frame = geometry.photo_size(photo.size)
     settings = dict(model.settings)
@@ -205,9 +211,13 @@ def extend(
                     last_error = error
                     continue
                 scale_index = index
-                last_verdict = gate.check(
-                    composed, geometry.origin(photo.size)[0], photo_in_frame[0]
+                origin = geometry.origin(photo.size)
+                span = (
+                    (origin[1], photo_in_frame[1], True)
+                    if vertical
+                    else (origin[0], photo_in_frame[0])
                 )
+                last_verdict = gate.check(composed, *span)
                 if last_verdict["passed"]:
                     kept = (candidate, composed, seconds, peak_mib, scale, render)
                     break
@@ -233,6 +243,7 @@ def extend(
         "seed": used_seed,
         "attempts": len(rejected) + (1 if passed else 0),
         "panels": last_verdict["panels"] if last_verdict else [],
+        **({"axis": "y"} if vertical else {}),
         "rule": last_verdict["rule"] if last_verdict else "",
         "detectors": signatures,
         "rejected": rejected,

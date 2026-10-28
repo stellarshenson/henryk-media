@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 import re
 import threading
+from types import SimpleNamespace
 
-from conftest import OUTPAINT, VIDEO, FakeGate, FakeGenerator
+from conftest import FAKE_SMI, OUTPAINT, VIDEO, FakeGate, FakeGenerator, fake_gpus
 from PIL import Image
 import websocket
 
@@ -17,8 +18,10 @@ from henryk_media.imaging.extender import ASPECTS, FEATHER
 from henryk_media.studio import comfy
 from henryk_media.studio.app import INTERRUPTED, Job
 from henryk_media.studio.generators import GATE_FAILED, H3_REVISION, Outpaint, Video
+from henryk_media.studio.gpus import parse
 from henryk_media.studio.prompts import OUTPAINT_NEGATIVE, OUTPAINT_PROMPT
 
+GPU_1 = "GPU-11111111-1111-4111-8111-111111111111"
 GPU_2 = "GPU-22222222-2222-4222-8222-222222222222"
 RECIPE = PROJ_ROOT / ".agents/skills/image-outpainting/references/extender-recipe.md"
 
@@ -28,46 +31,43 @@ def real(gate: FakeGate | None = None) -> dict:
     return {"outpaint": Outpaint(gate or FakeGate()), "video": Video()}
 
 
-def submit(client, body: dict, gpu: int = 1) -> dict:
-    client.post("/api/gpu", {"index": gpu})
+def submit(client, body: dict) -> dict:
     status, reply = client.post("/api/jobs", body)
     assert status == 201, reply
     return reply["job"]
 
 
-def test_job_launches_comfyui_pinned_to_the_selected_gpu_uuid(
+def test_job_launches_comfyui_pinned_to_the_chosen_gpu_uuid(
     make_studio, serve, fake_server
 ) -> None:
     client = serve(make_studio())
-    job = submit(client, OUTPAINT, gpu=2)
-    assert job["gpu"]["uuid"] == GPU_2
-    client.wait(job["id"], "done")
+    job = submit(client, OUTPAINT)
+    done = client.wait(job["id"], "done")
+    assert done["gpu"]["uuid"] == GPU_1  # the largest card that held the frame
     setup = fake_server.instances[0].launched
-    assert setup.gpu == GPU_2
+    assert setup.gpu == GPU_1
     command = setup.launch_command
-    pin = f"CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES={GPU_2} "
+    pin = f"CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES={GPU_1} "
     assert pin in command
     assert command.index(pin) < command.index(".venv/bin/python main.py")
     assert f"--port {setup.port} " in command
 
 
-def test_gpu_change_is_refused_while_busy_and_stops_the_idle_server(
-    make_studio, serve, fake_server
-) -> None:
-    generator = FakeGenerator(block=True)
-    client = serve(make_studio({"outpaint": generator, "video": generator}))
-    first = submit(client, OUTPAINT, gpu=1)
-    assert generator.started.wait(10)
-    assert client.post("/api/gpu", {"index": 2})[0] == 409
-    generator.release.set()
+def test_server_moves_to_the_gpu_the_next_job_chooses(make_studio, serve, fake_server) -> None:
+    texts = [FAKE_SMI.replace("97887, 96000, 1100", "97887, 1000, 96887")]  # GPU 1 busy
+    client = serve(make_studio(gpus=lambda: parse(texts[0])))
+    first = submit(client, OUTPAINT)
     client.wait(first["id"], "done")
-    server = fake_server.instances[0]
-    assert server.stopped == 0
-    assert client.post("/api/gpu", {"index": 2}) == (200, {"selected": 2})
-    assert server.stopped == 1
-    second = submit(client, OUTPAINT, gpu=2)
+    assert fake_server.instances[0].launched.gpu == GPU_2  # the largest card with room
+    texts[0] = FAKE_SMI  # GPU 1 frees up
+    second = submit(client, OUTPAINT)
     client.wait(second["id"], "done")
-    assert fake_server.instances[1].launched.gpu == GPU_2
+    assert fake_server.instances[0].stopped == 1  # the server moves off GPU 2
+    assert fake_server.instances[1].launched.gpu == GPU_1
+    third = submit(client, OUTPAINT)
+    client.wait(third["id"], "done")
+    assert len(fake_server.instances) == 2  # same choice as the running server: reused
+    assert fake_server.instances[1].stopped == 0
 
 
 def tree_hashes(root: Path) -> dict[str, str]:
@@ -118,9 +118,9 @@ def test_cfg_defaults_to_one_and_reaches_the_graph(make_studio, serve, fake_serv
     assert client.get("/api/prompts?ref=0/IMG_0001.jpg&kind=outpaint")[1]["preset"]["cfg"] == 1.0
     client.wait(submit(client, {**OUTPAINT, "cfg": 2.5})["id"], "done")
     assert fake_server.instances[0].graphs[0]["10"]["inputs"]["cfg"] == 2.5
-    omitted = {key: value for key, value in OUTPAINT.items() if key not in ("cfg", "width")}
+    omitted = {key: value for key, value in OUTPAINT.items() if key not in ("cfg", "resolution")}
     default = submit(client, omitted)
-    assert (default["params"]["cfg"], default["params"]["width"]) == (1.0, 1280)
+    assert (default["params"]["cfg"], default["params"]["size"]) == (1.0, [1920, 1080])
     client.wait(default["id"], "done")
     assert fake_server.instances[0].graphs[-1]["10"]["inputs"]["cfg"] == 1.0
     for cfg in (0, 100.5, "2", True):
@@ -267,15 +267,33 @@ def test_listener_hands_text_frames_to_on_event_and_reconnects(monkeypatch) -> N
     assert urls == ["ws://127.0.0.1:1/ws?clientId=x"] * 2
 
 
-def test_out_of_memory_fails_the_job_naming_the_gpu(make_studio, serve, fake_server, fake_film):
+def test_graph_is_queued_with_the_listener_client_id(monkeypatch) -> None:
+    server = object.__new__(comfy.StudioServer)
+    server.setup = SimpleNamespace(port=1, gpu=GPU_2)
+    server.client_id = "listener"
+    bodies: list[dict] = []
+
+    def api(port: int, path: str, body: dict | None = None) -> dict:
+        if path == "/prompt":
+            bodies.append(body)
+            return {"prompt_id": "p"}
+        return {"p": {"status": {"status_str": "success"}}}
+
+    monkeypatch.setattr("henryk_media.imaging.server.api", api)
+    monkeypatch.setattr("henryk_media.imaging.server.gpu_used_mib", lambda gpu: 0)
+    server.run({"1": {"class_type": "KSampler"}})
+    assert bodies[0]["client_id"] == server.client_id
+
+
+def test_out_of_memory_fails_with_a_plain_warning(make_studio, serve, fake_server, fake_film):
     fake_server.errors.append(RuntimeError("ComfyUI render failed: torch.OutOfMemoryError"))
     client = serve(make_studio(real()))
     job = client.wait(submit(client, VIDEO)["id"], "done", "failed")
     assert (job["state"], job["stage"], job["result"]) == ("failed", "failed", None)
-    assert job["error"].startswith(
-        "out of memory on GPU 1 NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition (102.6 GB)"
-    )
-    assert "torch.OutOfMemoryError" in job["error"]
+    assert "needs " in job["error"]
+    assert job["error"].endswith("; the workstation cannot provide it")
+    for hidden in ("NVIDIA", "GPU", "102.6", "torch.OutOfMemoryError"):
+        assert hidden not in job["error"], job["error"]
 
 
 def test_jobs_run_one_at_a_time_in_submission_order(make_studio, serve) -> None:
@@ -406,3 +424,117 @@ def test_restart_lists_results_and_fails_interrupted_jobs(make_studio, serve, tm
     interrupted = listed[running.id]
     assert (interrupted["state"], interrupted["error"]) == ("failed", INTERRUPTED)
     assert json.loads((jobs / running.id / "job.json").read_text())["state"] == "failed"
+
+
+PIPELINE = {**OUTPAINT, "video": {key: VIDEO[key] for key in ("prompt", "duration", "resolution")}}
+
+
+def test_pipeline_runs_both_steps_on_the_gpu_chosen_for_the_clip(
+    make_studio, serve, fake_server
+) -> None:
+    # GPU 1 holds the 21.317 GB frame but not the 68.823 GB clip: the pipeline needs GPU 2
+    held_only = FAKE_SMI.replace("97887, 96000, 1100", "97887, 30000, 67887")
+    client = serve(make_studio(gpus=fake_gpus(held_only)))
+    frame = submit(client, PIPELINE)
+    clip = next(job for job in client.get("/api/jobs")[1]["jobs"] if job["after"] == frame["id"])
+    done_frame = client.wait(frame["id"], "done", "failed")
+    done_clip = client.wait(clip["id"], "done", "failed")
+    assert (done_frame["state"], done_clip["state"]) == ("done", "done"), (done_frame, done_clip)
+    assert done_frame["gpu"]["uuid"] == GPU_2 == done_clip["gpu"]["uuid"]
+    assert [server.launched.gpu for server in fake_server.instances] == [GPU_2]  # one server
+    sidecar = client.get(f"/api/file?ref={done_clip['sidecar']['ref']}")[1].decode()
+    assert "- Studio GPU: index 2" in sidecar
+
+
+def test_pipeline_frees_the_frame_model_before_the_clip(make_studio, serve, fake_server) -> None:
+    generator = FakeGenerator()
+    client = serve(make_studio({"outpaint": generator, "video": generator}))
+    frame = submit(client, PIPELINE)
+    clip = next(job for job in client.get("/api/jobs")[1]["jobs"] if job["after"] == frame["id"])
+    done_frame = client.wait(frame["id"], "done", "failed")
+    done_clip = client.wait(clip["id"], "done", "failed")
+    assert (done_frame["state"], done_clip["state"]) == ("done", "done"), (done_frame, done_clip)
+    assert generator.jobs == [frame["id"], clip["id"]]  # the frame, then the clip
+    assert generator.releases == [0, 1]  # freed after the frame, before the clip's prompt
+    assert fake_server.instances[0].releases == 1  # one server, one model resident at a time
+    assert done_clip["gpu"]["uuid"] == done_frame["gpu"]["uuid"]  # the clip keeps the frame's GPU
+
+
+def test_pipeline_queues_the_video_of_the_frame_result_after_it(
+    make_studio, serve, trashed, tmp_path
+) -> None:
+    frames = FakeGenerator(block=True)
+    seen: list[tuple[str, list]] = []
+
+    def video(job, server, folder):
+        seen.append((job.path, list(trashed)))
+        return FakeGenerator().run(job, server, folder)
+
+    client = serve(make_studio({"outpaint": frames, "video": SimpleNamespace(run=video)}))
+    frame = submit(client, PIPELINE)
+    assert frames.started.wait(10)
+    again = submit(client, OUTPAINT)  # the same source and kind, queued behind the video
+    listed = client.get("/api/jobs")[1]["jobs"]
+    assert [job["id"] for job in listed][::2] == [again["id"], frame["id"]]
+    queued = listed[1]
+    assert (queued["kind"], queued["after"], queued["state"]) == ("video", frame["id"], "queued")
+    assert queued["params"]["prompt"] == VIDEO["prompt"] and frame["params"]["aspect"] == "16x9"
+    frames.release.set()
+    video_job = client.wait(queued["id"], "done")
+    client.wait(again["id"], "done")
+    result = tmp_path / "state/jobs" / frame["id"] / "IMG_0001.png"
+    assert seen == [(str(result), [])]  # the frame was kept while its video waited and ran
+    assert video_job["source"]["label"] == f"jobs/{frame['id']}/IMG_0001.png"
+    assert frames.jobs == [frame["id"], again["id"]]
+    assert trashed == [tmp_path / "state/jobs" / frame["id"]]  # the latest outpaint, afterwards
+
+
+def test_pipeline_video_fails_with_the_frame_jobs_error(make_studio, serve) -> None:
+    def fail(job, server, folder):
+        raise RuntimeError("the frame step failed")
+
+    video = FakeGenerator()
+    client = serve(make_studio({"outpaint": SimpleNamespace(run=fail), "video": video}))
+    frame = submit(client, PIPELINE)
+    queued = client.get("/api/jobs")[1]["jobs"][0]
+    assert client.wait(frame["id"], "failed")["error"] == "the frame step failed"
+    failed = client.wait(queued["id"], "failed")
+    assert (failed["error"], failed["result"], video.jobs) == ("the frame step failed", None, [])
+    bad = {**PIPELINE, "video": {**PIPELINE["video"], "duration": 7}}
+    assert client.post("/api/jobs", bad)[0] == 400
+    assert client.post("/api/jobs", {**VIDEO, "video": PIPELINE["video"]})[0] == 400
+    assert len(client.get("/api/jobs")[1]["jobs"]) == 2  # a refused pipeline queues nothing
+
+
+def test_pipeline_video_fails_when_its_frame_is_cancelled_while_queued(make_studio, serve):
+    blocker, video = FakeGenerator(block=True), FakeGenerator()
+    client = serve(make_studio({"outpaint": blocker, "video": video}))
+    submit(client, {**OUTPAINT, "ref": "1/IMG_0003.png"})  # runs, another source
+    assert blocker.started.wait(10)
+    frame = submit(client, PIPELINE)
+    queued = next(job for job in client.get("/api/jobs")[1]["jobs"] if job["after"] == frame["id"])
+    assert client.post(f"/api/jobs/{frame['id']}/cancel", {})[0] == 200
+    blocker.release.set()
+    failed = client.wait(queued["id"], "failed")
+    assert (failed["error"], video.jobs) == (f"the frame job {frame['id']} was cancelled", [])
+
+
+def test_pipeline_cancelled_frame_with_earlier_outpaint_of_the_same_source(make_studio, serve):
+    """An earlier outpaint of the source starts, so the latest-result rule removes the cancelled
+    frame job from the table before its video is taken; the worker fails the video and runs on."""
+    blocker, video = FakeGenerator(block=True), FakeGenerator()
+    client = serve(make_studio({"outpaint": blocker, "video": video}))
+    other = {**OUTPAINT, "ref": "1/IMG_0003.png"}
+    submit(client, other)  # runs, another source
+    assert blocker.started.wait(10)
+    earlier = submit(client, OUTPAINT)  # queued, the pipeline's source
+    frame = submit(client, PIPELINE)
+    queued = next(job for job in client.get("/api/jobs")[1]["jobs"] if job["after"] == frame["id"])
+    assert client.post(f"/api/jobs/{frame['id']}/cancel", {})[0] == 200
+    blocker.release.set()
+    client.wait(earlier["id"], "done")
+    failed = client.wait(queued["id"], "failed")
+    assert (failed["error"], video.jobs) == (f"the frame job {frame['id']} was cancelled", [])
+    assert frame["id"] not in [job["id"] for job in client.get("/api/jobs")[1]["jobs"]]
+    later = submit(client, other)  # the worker still runs
+    assert client.wait(later["id"], "done", "failed")["state"] == "done"

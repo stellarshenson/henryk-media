@@ -20,3 +20,4 @@ Keep this index current; large files get a `<file>.md` sidecar. See [../README.m
 - `driving-clips/liveportrait/d19.mp4` - LivePortrait bundled driving example (`assets/examples/driving/d19.mp4`, MIT); 480x480, 30 fps, 250 frames
 - `driving-clips/liveportrait/d20.mp4` - LivePortrait bundled driving example (`assets/examples/driving/d20.mp4`, MIT); 480x480, 25 fps, 175 frames
 - `henryk-urodziny-2026/prompts/` - outpainting and image-to-video prompts that produced the henryk-urodziny-2026 images and clips; index in `henryk-urodziny-2026/prompts/README.md`
+- `showcase/` - the Star Colonel's own photo IMG_0020 with its metadata removed, its 16:9 Full HD outpainted frame and its 5 s HD clip, published in the repository at his order of 2026-10-28; each file has a `.md` sidecar

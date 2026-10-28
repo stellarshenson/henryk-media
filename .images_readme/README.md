@@ -1,2 +1,4 @@
 - `father-and-henry-programming.webp` - drawing of the father and Henry programming together on a computer; provenance in `father-and-henry-programming.md`
 - `father-and-henry-watching.webp` - drawing of the father and Henry watching the result together; provenance in `father-and-henry-watching.md`
+- `studio-controls.png` - screenshot of the studio's controls: the photo picker, the Frame panel and the Clip panel; provenance in `studio-controls.md`
+- `studio-results.png` - screenshot of the studio's Jobs panel with the finished frame and clip of a live photo; provenance in `studio-results.md`

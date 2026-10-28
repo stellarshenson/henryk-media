@@ -4,7 +4,10 @@ Refuses a notebook with outputs or attachments (nbformat 4 cells and nbformat 3 
 non-Markdown file under data/, a copy of an original from data/raw/ or data/external/, an image or
 video outside .images_readme/, a .images_readme/ image without its <stem>.md sidecar or within
 difference-hash distance NEAR of an original, a Git LFS pointer, a .gitattributes that sets a
-filter, a data:image or data:video URI and an archive.
+filter, a data:image or data:video URI and an archive. A blob under data/external/showcase/ whose
+sha256 and path both match a line of showcase.sha256 is the owner's published showcase and is
+exempt from every rule; it still counts as an original, so a copy of it at any other path is
+refused.
 
   python3 photo_guard.py pre-commit          checks the staged blobs
   python3 photo_guard.py pre-push <remote>   checks the blobs of the pushed commits (refs on stdin)
@@ -21,6 +24,7 @@ import sys
 
 NEAR = 10  # Hamming distance of the 64-bit difference hash at or below which an image is a copy
 VENV_PYTHON = ".venv/bin/python"
+SHOWCASE = "data/external/showcase/"
 # a URI needs the ; or , after the subtype, so prose naming the scheme passes
 DATA_URI = re.compile(rb"data:(?:image|video)/[\w.+-]*[;,]", re.IGNORECASE)
 OUTPUTS_ADVICE = {
@@ -152,6 +156,13 @@ def tracked_originals():
     return found
 
 
+def showcase():
+    """(sha256, path) of every blob the owner published, one `<sha256>  <path>` line each in
+    showcase.sha256 beside this script (sha256sum format)."""
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "showcase.sha256")) as fh:
+        return {tuple(line.split()) for line in fh if line.strip()}
+
+
 def read(label, blob, n=-1):
     """The first n bytes, or all, of an original: the git blob with sha blob, else the file at
     path label."""
@@ -250,11 +261,15 @@ def check(entries, hook):
         if size in sizes:
             by_sha.setdefault(hashlib.sha256(read(label, blob)).hexdigest(), label)
 
+    admitted = showcase()
     refusals, with_outputs, readme = [], [], []
     for label, p, b, tracked in entries:
+        sha = hashlib.sha256(b).hexdigest()
+        if p.startswith(SHOWCASE) and (sha, p) in admitted:
+            continue  # the owner's showcase blob, exempt from every rule
         if p.startswith("data/") and not (p.endswith(".md") or os.path.basename(p) == ".gitkeep"):
             refusals.append((label, "only .md and .gitkeep files may be committed under data/"))
-        original = by_sha.get(hashlib.sha256(b).hexdigest())
+        original = by_sha.get(sha)
         if original:
             refusals.append((label, "byte-equal to the original " + original))
         kind = media_type(b)

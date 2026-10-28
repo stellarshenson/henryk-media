@@ -78,9 +78,14 @@
     "inputs": {"samples": ["11", 0], "vae": ["5", 0]},
     "_meta": {"title": "Decode audio"}
   },
+  "16": {
+    "class_type": "ImageCrop",
+    "inputs": {"image": ["12", 0], "width": "{{CROP_WIDTH}}", "height": "{{CROP_HEIGHT}}", "x": "{{CROP_X}}", "y": "{{CROP_Y}}"},
+    "_meta": {"title": "Centre crop of the 32-step render to the preset size (fill {{CROP_WIDTH}}, {{CROP_HEIGHT}}, {{CROP_X}}, {{CROP_Y}})"}
+  },
   "14": {
     "class_type": "CreateVideo",
-    "inputs": {"images": ["12", 0], "audio": ["13", 0], "fps": 24.0, "bit_depth": 8},
+    "inputs": {"images": ["16", 0], "audio": ["13", 0], "fps": 24.0, "bit_depth": 8},
     "_meta": {"title": "Video at the native 24 fps"}
   },
   "15": {

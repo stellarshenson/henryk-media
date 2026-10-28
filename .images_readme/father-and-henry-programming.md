@@ -8,7 +8,7 @@ Generated drawing, not a photograph or a recording. An illustration made by FLUX
 - Image 2, the boy: drawn from Henry in IMG_8840 at the Star Colonel's request; the girl in that photo is excluded from the crop
 - Image 3, the monitor picture: drawn from a frame of the IMG_8840 MiniMax H3 clip at 4.0 s; the girl is excluded from the crop
 
-Generated locally on the workstation GPU through a ComfyUI server bound to 127.0.0.1. No photo is in the repository, and no photo was sent to an external service.
+Generated locally on the workstation GPU through a ComfyUI server bound to 127.0.0.1. No photo of Henry is in the repository, and no photo was sent to an external service.
 
 ## Settings
 

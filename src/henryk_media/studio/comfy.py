@@ -1,10 +1,11 @@
-"""The studio's one ComfyUI server, pinned by UUID to the selected GPU, and its progress events.
+"""The studio's one ComfyUI server, pinned by UUID to the chosen GPU, and its progress events.
 
 ``StudioServer`` is ``ComfyServer`` for starting, stopping, running graphs and the outpaint, plus
 ``image_to_video.Server`` for the clip render and FILM; MRO StudioServer, ComfyServer, Server. A
 daemon thread reads ComfyUI's websocket and hands every text message to ``on_event``; prompts are
-queued without a client id, so ComfyUI broadcasts their events to every socket. ``advance`` turns
-one message into the job's stage, step and percent.
+queued with the listener's client id, so ComfyUI sends all their events to that socket, including
+executing and execution_success. ``advance`` turns one message into the job's stage, step and
+percent.
 """
 
 from collections.abc import Callable
@@ -104,7 +105,8 @@ class StudioServer(ComfyServer, i2v.Server):
         self.node_types: dict[str, str] = {}
         self.closed = threading.Event()
         super().__init__(setup)
-        url = f"ws://127.0.0.1:{setup.port}/ws?clientId={uuid.uuid4().hex}"
+        self.client_id = uuid.uuid4().hex
+        url = f"ws://127.0.0.1:{setup.port}/ws?clientId={self.client_id}"
         threading.Thread(target=self.listen, args=(url,), daemon=True).start()
 
     def listen(self, url: str) -> None:
@@ -131,11 +133,15 @@ class StudioServer(ComfyServer, i2v.Server):
     def run(self, graph: dict) -> tuple[dict, float, int]:
         """Record each node's class for ``advance``, then run the graph."""
         self.node_types = {key: node["class_type"] for key, node in graph.items()}
-        return super().run(graph)
+        return super().run(graph, client_id=self.client_id)
 
     def interrupt(self) -> None:
         """Interrupt the graph the server is executing."""
         i2v.api(self.setup.port, "/interrupt", {})
+
+    def release_models(self) -> None:
+        """Unload the server's models, so a pipeline keeps one model resident at a time."""
+        i2v.api(self.setup.port, "/free", {"unload_models": True, "free_memory": True})
 
     def stop(self) -> None:
         """Stop the listener, then the server."""

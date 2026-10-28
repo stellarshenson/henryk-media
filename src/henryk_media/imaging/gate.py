@@ -177,24 +177,11 @@ class PersonGate:
             "person": f"{PERSON_WEIGHTS} class {PERSON_CLASS} person, {shared}",
         }
 
-    def check(self, frame: Image.Image, photo_left: int, photo_width: int) -> dict[str, object]:
-        """Return the gate verdict for one composited frame.
-
-        Args:
-            frame: The composited frame, RGB, with the photo already pasted back.
-            photo_left: x of the photo's left edge in the frame.
-            photo_width: Width of the photo in the frame.
-
-        Returns:
-            A JSON-ready record with ``passed``, the panel x ranges, the rule text, the stranger
-            ``violations``, the face ``continuations`` and the ``clipped`` detections; no
-            violation means the frame passed.
-        """
-        ranges = panels(frame.width, photo_left, photo_width)
-        strangers: list[dict[str, object]] = []
-        continuations: list[dict[str, object]] = []
-        clipped: list[dict[str, object]] = []
-        groups = {STRANGER: strangers, CONTINUATION: continuations, CLIPPED: clipped}
+    def detections(
+        self, frame: Image.Image
+    ) -> list[tuple[str, str, float, tuple[float, float, float, float]]]:
+        """Return every face and person the detectors find: detector, label, confidence, box."""
+        found = []
         for detector in ("face", "person"):
             result = self._load(detector).predict(
                 frame,
@@ -209,22 +196,49 @@ class PersonGate:
                 if detector == "person" and int(label) != PERSON_CLASS:
                     continue
                 coordinates = tuple(float(value) for value in box)
-                inside = inside_fraction(coordinates, ranges)
-                kind = detection_kind(detector, inside, touches_border(coordinates, frame.size))
-                if kind is None:
-                    continue
-                record: dict[str, object] = {
-                    "detector": detector,
-                    "label": result.names[int(label)],
-                    "confidence": round(float(confidence), 3),
-                    "box": _box(coordinates),
-                    "inside": inside,
-                    "kind": kind,
-                }
-                groups[kind].append(record)
+                found.append((detector, result.names[int(label)], float(confidence), coordinates))
+        return found
+
+    def check(
+        self, frame: Image.Image, photo_left: int, photo_width: int, vertical: bool = False
+    ) -> dict[str, object]:
+        """Return the gate verdict for one composited frame.
+
+        Args:
+            frame: The composited frame, RGB, with the photo already pasted back.
+            photo_left: x of the photo's left edge in the frame; its top edge when vertical.
+            photo_width: Width of the photo in the frame; its height when vertical.
+            vertical: The panels lie above and below the photo, not left and right of it.
+
+        Returns:
+            A JSON-ready record with ``passed``, the panel ranges (x, or y when vertical), the
+            rule text, the stranger ``violations``, the face ``continuations`` and the
+            ``clipped`` detections; no violation means the frame passed.
+        """
+        ranges = panels(frame.height if vertical else frame.width, photo_left, photo_width)
+        strangers: list[dict[str, object]] = []
+        continuations: list[dict[str, object]] = []
+        clipped: list[dict[str, object]] = []
+        groups = {STRANGER: strangers, CONTINUATION: continuations, CLIPPED: clipped}
+        for detector, label, confidence, coordinates in self.detections(frame):
+            x1, y1, x2, y2 = coordinates
+            inside = inside_fraction((y1, x1, y2, x2) if vertical else coordinates, ranges)
+            kind = detection_kind(detector, inside, touches_border(coordinates, frame.size))
+            if kind is None:
+                continue
+            record: dict[str, object] = {
+                "detector": detector,
+                "label": label,
+                "confidence": round(confidence, 3),
+                "box": _box(coordinates),
+                "inside": inside,
+                "kind": kind,
+            }
+            groups[kind].append(record)
         return {
             "passed": not strangers,
             "panels": [list(pair) for pair in ranges],
+            **({"axis": "y"} if vertical else {}),
             "rule": (
                 "stranger: a face or person box wholly inside an added panel and clear of the "
                 "frame border; continuation: a face crossing into the photo, recorded and not a "

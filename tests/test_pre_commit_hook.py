@@ -1,6 +1,7 @@
 """The pre-commit and pre-push hooks refuse originals, media outside .images_readme/, content
 filters, embedded media, archives and notebook payloads."""
 
+import hashlib
 import json
 from pathlib import Path
 import random
@@ -12,6 +13,8 @@ from PIL import Image, ImageDraw
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+SHOWCASE = ROOT / "data" / "external" / "showcase"
+SHOWCASE_FILES = ("IMG_0020.jpeg", "IMG_0020-frame-16x9-fullhd.png", "IMG_0020-clip-hd-5s.mp4")
 
 
 @pytest.fixture
@@ -71,6 +74,18 @@ def notebook(path, cell):
     return text(
         path, json.dumps({"cells": [cell], "metadata": {}, "nbformat": 4, "nbformat_minor": 5})
     )
+
+
+def showcase(repo):
+    """Copy the three owner showcase files and their sidecars into the repository."""
+    paths = []
+    for name in SHOWCASE_FILES:
+        for src in (SHOWCASE / name, (SHOWCASE / name).with_suffix(".md")):
+            dst = repo / src.relative_to(ROOT)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(src, dst)
+            paths.append(dst)
+    return paths
 
 
 def git(repo, *args):
@@ -318,3 +333,75 @@ def test_clean_push_passes(repo, remote):
         assert result.returncode == 0, result.stderr
     head = git(repo, "rev-parse", "HEAD").stdout
     assert git(remote, "rev-parse", "main").stdout == head
+
+
+def test_showcase_passes_at_commit_and_push(repo, remote):
+    result = commit(repo, *showcase(repo))
+    assert result.returncode == 0, result.stderr
+    result = git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    assert result.returncode == 0, result.stderr
+
+
+def test_fourth_image_under_showcase_fails(repo):
+    extra = image(repo / "data" / "external" / "showcase" / "extra.png", "PNG")
+    result = commit(repo, *showcase(repo), extra, text(extra.with_suffix(".md")), force=True)
+    assert result.returncode == 1
+    assert "data/external/showcase/extra.png: PNG image outside .images_readme/" in result.stderr
+    assert "IMG_0020" not in result.stderr
+
+
+def test_showcase_file_with_changed_byte_fails(repo):
+    paths = showcase(repo)
+    jpeg = repo / "data" / "external" / "showcase" / "IMG_0020.jpeg"
+    b = bytearray(jpeg.read_bytes())
+    b[len(b) // 2] ^= 1
+    jpeg.write_bytes(b)
+    result = commit(repo, *paths)
+    assert result.returncode == 1
+    assert "data/external/showcase/IMG_0020.jpeg: JPEG image outside .images_readme/" in (
+        result.stderr
+    )
+
+
+def test_allow_line_outside_showcase_admits_nothing(repo):
+    src = SHOWCASE / "IMG_0020.jpeg"
+    moved = repo / "docs" / "IMG_0020.jpeg"
+    moved.parent.mkdir()
+    shutil.copy(src, moved)
+    with open(repo / ".githooks" / "showcase.sha256", "a") as fh:
+        fh.write(hashlib.sha256(src.read_bytes()).hexdigest() + "  docs/IMG_0020.jpeg\n")
+    result = commit(repo, moved)
+    assert result.returncode == 1
+    assert "docs/IMG_0020.jpeg: JPEG image outside .images_readme/" in result.stderr
+
+
+@pytest.mark.parametrize("dest", ["data/external/showcase/copy.mp4", ".images_readme/clip.mp4"])
+def test_showcase_blob_at_another_path_fails(repo, dest):
+    paths = showcase(repo)
+    copy = repo / dest
+    copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(SHOWCASE / "IMG_0020-clip-hd-5s.mp4", copy)
+    result = commit(repo, *paths, copy, text(copy.with_suffix(".md")), force=True)
+    assert result.returncode == 1
+    assert dest + ": byte-equal to the original data/external/showcase/" in result.stderr
+
+
+def test_original_copy_refused_beside_showcase(repo):
+    original = photo(repo / "data" / "raw" / "orig.jpg")
+    copy = repo / "docs" / "x.bin"
+    copy.parent.mkdir()
+    shutil.copy(original, copy)
+    result = commit(repo, *showcase(repo), copy)
+    assert result.returncode == 1
+    assert "docs/x.bin: byte-equal to the original data/raw/orig.jpg" in result.stderr
+    assert "IMG_0020" not in result.stderr
+
+
+def test_second_commit_after_showcase_in_head_passes(repo, remote):
+    assert commit(repo, *showcase(repo)).returncode == 0
+    sidecar = repo / "data" / "external" / "showcase" / "IMG_0020.md"
+    sidecar.write_text(sidecar.read_text() + "\n- note\n")
+    result = commit(repo, sidecar, text(repo / "README.md"))
+    assert result.returncode == 0, result.stderr
+    result = git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    assert result.returncode == 0, result.stderr
